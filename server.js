@@ -14,6 +14,35 @@ const httpClients = new Map();
 
 const STALE_MS = 5_000;
 
+// ─── Persistent executions counter ───
+const STATS_FILE = path.join(__dirname, "stats.json");
+let stats = { executions: 0 };
+try {
+  if (fs.existsSync(STATS_FILE)) {
+    stats = Object.assign(stats, JSON.parse(fs.readFileSync(STATS_FILE, "utf8")));
+  }
+} catch (e) { console.error("[stats] load error:", e.message); }
+
+let saveTimer = null;
+function saveStats() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); }
+    catch (e) { console.error("[stats] save error:", e.message); }
+  }, 500);
+}
+
+function bumpExecutions() {
+  stats.executions += 1;
+  saveStats();
+  return stats.executions;
+}
+
+// flush stats on shutdown
+process.on("SIGINT", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
+process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
+
 // Where to look for .lua files
 const LUA_SEARCH_PATHS = [
   __dirname,
@@ -145,6 +174,24 @@ app.post("/send", (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Executions counter endpoints ───
+app.post("/execution", (req, res) => {
+  const count = bumpExecutions();
+  const body = req.body || {};
+  console.log(`[execution] +1 → ${count}${body.userId ? ` (user ${body.userId})` : ""}`);
+  res.json({ ok: true, count });
+});
+
+app.get("/stats", (req, res) => {
+  res.json({ executions: stats.executions });
+});
+
+app.post("/stats/reset", (req, res) => {
+  stats.executions = 0;
+  saveStats();
+  res.json({ ok: true, count: 0 });
+});
+
 setInterval(() => {
   const now = Date.now();
   for (const [uid, entry] of httpClients) {
@@ -180,7 +227,6 @@ function serveLua(name) {
 app.get("/hubscript.lua",  serveLua("hubscript.lua"));
 app.get("/controller.lua", serveLua("controller.lua"));
 
-// Diagnostic endpoint — see what files the server can find
 app.get("/files", (req, res) => {
   const found = {};
   for (const dir of LUA_SEARCH_PATHS) {
@@ -194,7 +240,7 @@ app.get("/files", (req, res) => {
   res.json({ searchPaths: LUA_SEARCH_PATHS, files: found, cwd: process.cwd(), dirname: __dirname });
 });
 
-app.get("/clients", (req, res) => res.json({ users: userListPayload() }));
+app.get("/clients", (req, res) => res.json({ users: userListPayload(), executions: stats.executions }));
 
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
@@ -203,34 +249,173 @@ app.get("/", (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   *{box-sizing:border-box}
-  body{background:#121216;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:24px}
-  h1{font-size:20px;margin:0 0 4px;color:#fff}
+  html,body{height:100%}
+  body{
+    background:#0b0b10;
+    color:#eee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    margin:0;padding:24px;
+    position:relative;overflow-x:hidden;
+    min-height:100vh;
+  }
+  /* animated background layers */
+  #bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .orb{
+    position:fixed;border-radius:50%;filter:blur(90px);opacity:0.35;
+    z-index:0;pointer-events:none;will-change:transform;
+  }
+  .orb1{width:480px;height:480px;background:#7850ff;top:-140px;left:-140px;
+    animation:drift1 22s ease-in-out infinite}
+  .orb2{width:560px;height:560px;background:#2f8fff;bottom:-180px;right:-160px;
+    animation:drift2 26s ease-in-out infinite}
+  .orb3{width:360px;height:360px;background:#ff4fa0;top:40%;left:55%;
+    animation:drift3 30s ease-in-out infinite;opacity:0.18}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(70px,90px) scale(1.1)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-90px,-60px) scale(1.15)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-60px,60px) scale(0.9)}}
+  .scanline{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 3px);
+    mix-blend-mode:overlay;
+  }
+  .vignette{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%);
+  }
+  /* content sits above the background */
+  .content{position:relative;z-index:1}
+  h1{font-size:22px;margin:0 0 4px;color:#fff;
+    background:linear-gradient(90deg,#fff,#b9a3ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    letter-spacing:0.3px}
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px}
+  .stats{display:flex;gap:10px;flex-wrap:wrap}
+  .stat{
+    background:rgba(28,28,34,0.7);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(70,70,82,0.7);
+    padding:10px 16px;border-radius:12px;
+    min-width:110px;text-align:left;
+  }
+  .stat .label{font-size:10px;color:#8a8a9a;text-transform:uppercase;letter-spacing:1px;font-weight:600}
+  .stat .value{font-size:22px;font-weight:700;color:#fff;margin-top:2px;line-height:1.1}
+  .stat .value.accent{color:#b9a3ff}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;max-width:1200px}
-  .card{background:#1c1c22;border:1px solid #2e2e38;border-radius:10px;padding:14px;display:flex;gap:12px;align-items:center;transition:background .2s}
-  .card:hover{background:#22222a}
-  .av{width:56px;height:56px;border-radius:8px;background:#2a2a34;flex-shrink:0}
+  .card{
+    background:rgba(28,28,34,0.65);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(70,70,82,0.6);
+    border-radius:12px;padding:14px;display:flex;gap:12px;align-items:center;
+    transition:transform .15s ease,border-color .2s,background .2s;
+  }
+  .card:hover{transform:translateY(-2px);border-color:rgba(120,90,255,0.6);background:rgba(34,34,42,0.75)}
+  .av{width:56px;height:56px;border-radius:10px;background:#2a2a34;flex-shrink:0;
+    border:1px solid rgba(120,90,255,0.25)}
   .meta{min-width:0;flex:1}
   .name{font-weight:600;color:#fff;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .game{color:#9a9aaa;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;margin-top:6px}
-  .ws{background:#1e3a2a;color:#7ddd9f}
-  .http{background:#3a2f1e;color:#ddd47f}
-  .empty{color:#666;padding:40px;text-align:center;grid-column:1/-1}
-  .pill{position:fixed;top:24px;right:24px;background:#1c1c22;border:1px solid #2e2e38;padding:6px 12px;border-radius:20px;font-size:12px;color:#8a8a9a}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;margin-top:6px;letter-spacing:0.5px}
+  .ws{background:rgba(30,58,42,0.8);color:#7ddd9f;border:1px solid rgba(125,221,159,0.2)}
+  .http{background:rgba(58,47,30,0.8);color:#ddd47f;border:1px solid rgba(221,212,127,0.2)}
+  .empty{color:#666;padding:60px 20px;text-align:center;grid-column:1/-1;
+    background:rgba(28,28,34,0.4);border:1px dashed rgba(70,70,82,0.5);border-radius:12px}
+  @media (max-width:520px){.grid{grid-template-columns:1fr}h1{font-size:18px}}
 </style></head>
 <body>
-  <h1>Delta Hub Dashboard</h1>
-  <div class="sub">Live view of every client running the hub script</div>
-  <div class="pill" id="count">0 online</div>
-  <div class="grid" id="grid"><div class="empty">Loading...</div></div>
+  <canvas id="bg"></canvas>
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+  <div class="scanline"></div>
+  <div class="vignette"></div>
+
+  <div class="content">
+    <div class="header">
+      <div>
+        <h1>Delta Hub Dashboard</h1>
+        <div class="sub">Live view of every client running the hub script</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">Executions</div><div class="value accent" id="exec">0</div></div>
+        <div class="stat"><div class="label">Online</div><div class="value" id="count">0</div></div>
+      </div>
+    </div>
+    <div class="grid" id="grid"><div class="empty">Loading...</div></div>
+  </div>
+
 <script>
+// ── Constellation particles ──
+(function(){
+  const canvas = document.getElementById('bg');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
+  let W, H;
+  function resize(){
+    W = canvas.width = innerWidth * DPR;
+    H = canvas.height = innerHeight * DPR;
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+  }
+  resize();
+  addEventListener('resize', resize);
+
+  const N = Math.min(90, Math.max(40, Math.floor(innerWidth / 22)));
+  const parts = Array.from({length: N}, () => ({
+    x: Math.random()*W, y: Math.random()*H,
+    vx: (Math.random()-0.5)*0.25*DPR,
+    vy: (Math.random()-0.5)*0.25*DPR,
+    r: (Math.random()*1.4+0.6)*DPR,
+    hue: Math.random() < 0.5 ? 265 : 210  // purple / blue
+  }));
+
+  const MAX_D = 150 * DPR;
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    // connections
+    for(let i=0;i<parts.length;i++){
+      const a = parts[i];
+      for(let j=i+1;j<parts.length;j++){
+        const b = parts[j];
+        const dx = a.x-b.x, dy = a.y-b.y;
+        const d2 = dx*dx + dy*dy;
+        if(d2 < MAX_D*MAX_D){
+          const alpha = (1 - Math.sqrt(d2)/MAX_D) * 0.22;
+          ctx.strokeStyle = 'rgba(140,110,255,' + alpha + ')';
+          ctx.lineWidth = 0.7 * DPR;
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    // dots
+    for(const p of parts){
+      p.x += p.vx; p.y += p.vy;
+      if(p.x<0||p.x>W) p.vx *= -1;
+      if(p.y<0||p.y>H) p.vy *= -1;
+      const grad = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+      grad.addColorStop(0,'hsla('+p.hue+',90%,75%,0.9)');
+      grad.addColorStop(1,'hsla('+p.hue+',90%,75%,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r*4,0,Math.PI*2);
+      ctx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+// ── Dashboard data ──
 async function refresh() {
   try {
     const r = await fetch('/clients?t=' + Date.now());
     const data = await r.json();
     const users = data.users || [];
-    document.getElementById('count').textContent = users.length + ' online';
+    document.getElementById('count').textContent = users.length;
+    document.getElementById('exec').textContent = (data.executions ?? 0).toLocaleString();
     const grid = document.getElementById('grid');
     if (users.length === 0) {
       grid.innerHTML = '<div class="empty">No clients connected</div>';
