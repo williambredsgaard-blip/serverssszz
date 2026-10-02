@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Controller — Delta Hub  (with Troll tab)
+--  Controller — Delta Hub  (extended Troll tab)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -44,15 +44,10 @@ local function tw(o,info,props) local t=TweenService:Create(o,info,props); t:Pla
 local QI = TweenInfo.new(0.15, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
--- ═══════════ Window ═══════════
-local gui = C("ScreenGui",{
-    Name="DeltaController", ResetOnSpawn=false, IgnoreGuiInset=true,
-    ZIndexBehavior=Enum.ZIndexBehavior.Sibling, Parent=LP:WaitForChild("PlayerGui"),
-})
-
+-- Window
+local gui = C("ScreenGui",{Name="DeltaController",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
 local shadow = C("Frame",{BackgroundColor3=T.Shadow,BackgroundTransparency=1,Size=UDim2.new(0,500,0,360),Position=UDim2.new(0.5,-250,0.5,-166),ZIndex=0,Parent=gui})
 corner(shadow,14)
-
 local win = C("Frame",{BackgroundColor3=T.Glass,Size=UDim2.new(0,480,0,340),Position=UDim2.new(0.5,-240,0.5,-170),BackgroundTransparency=1,ZIndex=1,Parent=gui})
 corner(win,10); stroke(win, T.Stroke, 1, 0.4)
 
@@ -62,7 +57,6 @@ C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 
 local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(0,220,1,0),Font=Enum.Font.GothamBold,Text="Delta Controller",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
-
 local statusDot = C("Frame",{BackgroundColor3=T.Dim,BackgroundTransparency=1,Size=UDim2.new(0,6,0,6),Position=UDim2.new(1,-160,0.5,-3),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(statusDot,3)
 local statusLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(1,-150,0,0),Size=UDim2.new(0,120,1,0),Font=Enum.Font.Gotham,Text="starting...",TextColor3=T.Dim,TextTransparency=1,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
@@ -72,16 +66,12 @@ corner(minBtn,5)
 minBtn.MouseEnter:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Hover}) end)
 minBtn.MouseLeave:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Panel}) end)
 
--- X button: hides only, script stays injected
 local closeBtn = C("TextButton",{BackgroundColor3=T.Bad,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-24,0.5,-10),Font=Enum.Font.GothamBold,Text="×",TextColor3=T.Text,TextTransparency=1,TextSize=13,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(closeBtn,5)
 closeBtn.MouseEnter:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Bad}) end)
 closeBtn.MouseLeave:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Panel}) end)
-closeBtn.MouseButton1Click:Connect(function()
-    gui.Enabled = false
-end)
+closeBtn.MouseButton1Click:Connect(function() gui.Enabled = false end)
 
--- Toggle visibility back with RightShift (only you know this)
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.RightShift then
@@ -105,14 +95,12 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ═══════════ Horizontal tab bar ═══════════
+-- Tab bar
 local TAB_BAR_Y = 26
 local TAB_BAR_H = 30
-
 local tabBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y),Size=UDim2.new(1,0,0,TAB_BAR_H),BorderSizePixel=0,ZIndex=2,Parent=win,ClipsDescendants=true})
 local tabDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=0.5,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=tabBar})
 local tabX = 8
-
 local content = C("Frame",{BackgroundColor3=T.Bg,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y+TAB_BAR_H),Size=UDim2.new(1,0,1,-(TAB_BAR_Y+TAB_BAR_H)),BorderSizePixel=0,ZIndex=2,Parent=win})
 
 local pages = {}
@@ -121,24 +109,15 @@ local function makeTab(name)
     measure.Text = name; measure.Font = Enum.Font.GothamBold; measure.TextSize = 10; measure.Parent = gui
     local w = math.max(measure.TextBounds.X + 22, 50)
     measure:Destroy()
-
-    local btn = C("TextButton",{
-        BackgroundColor3=T.Panel, BackgroundTransparency=0.3,
-        Size=UDim2.new(0,w,0,22), Position=UDim2.new(0,tabX,0.5,-11),
-        Font=Enum.Font.GothamBold, Text=name, TextColor3=T.Dim, TextTransparency=0.2, TextSize=10,
-        AutoButtonColor=false, BorderSizePixel=0, Parent=tabBar, TextXAlignment=Enum.TextXAlignment.Center,
-    })
+    local btn = C("TextButton",{BackgroundColor3=T.Panel,BackgroundTransparency=0.3,Size=UDim2.new(0,w,0,22),Position=UDim2.new(0,tabX,0.5,-11),Font=Enum.Font.GothamBold,Text=name,TextColor3=T.Dim,TextTransparency=0.2,TextSize=10,AutoButtonColor=false,BorderSizePixel=0,Parent=tabBar,TextXAlignment=Enum.TextXAlignment.Center})
     corner(btn,6)
     local bStroke = stroke(btn, T.Stroke, 1, 0.6)
     tabX = tabX + w + 4
-
     local page = C("CanvasGroup",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),GroupTransparency=1,Visible=false,Parent=content})
     local scroll = C("ScrollingFrame",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),BorderSizePixel=0,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=3,ScrollBarImageColor3=T.Panel,Parent=page})
     pad(scroll,10,8)
     C("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder,Parent=scroll})
-
     pages[#pages+1] = {btn=btn,page=page,scroll=scroll,bStroke=bStroke}
-
     local function select()
         for _,p in ipairs(pages) do
             local isSel = (p.page == page)
@@ -160,7 +139,6 @@ local function makeTab(name)
     btn.MouseButton1Click:Connect(select)
     btn.MouseEnter:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.1}) end)
     btn.MouseLeave:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.3}) end)
-
     if #pages == 1 then select() end
     return scroll
 end
@@ -180,18 +158,16 @@ minBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ═══════════ Widgets ═══════════
+-- Widgets
 local function Section(parent, text)
     local wrap = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),AutomaticSize=Enum.AutomaticSize.Y,Parent=parent})
     C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),Font=Enum.Font.GothamBold,Text=text:upper(),TextColor3=T.Dim,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,Parent=wrap})
     C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=0.3,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,0,16),BorderSizePixel=0,Parent=wrap})
 end
-
 local function Label(parent, text)
     local l = C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,16),Font=Enum.Font.Gotham,Text=text,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,Parent=parent})
     return { Set = function(_, t) l.Text = t end }
 end
-
 local function Button(parent, name, image, cb)
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,28),Parent=parent})
     corner(f,6); stroke(f, T.Stroke, 1, 0.5)
@@ -203,7 +179,6 @@ local function Button(parent, name, image, cb)
     local lbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,textX,0,0),Size=UDim2.new(1,-textX-20,1,0),Font=Enum.Font.Gotham,Text=name,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,Parent=f})
     local dot = C("Frame",{BackgroundColor3=T.Warning,Size=UDim2.new(0,6,0,6),Position=UDim2.new(1,-16,0.5,-3),BorderSizePixel=0,Visible=false,Parent=f})
     corner(dot,3)
-
     local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Parent=f})
     b.MouseEnter:Connect(function() tw(f, QI, {BackgroundTransparency=0.05,BackgroundColor3=T.Hover}) end)
     b.MouseLeave:Connect(function() tw(f, QI, {BackgroundTransparency=0.25,BackgroundColor3=T.Panel}) end)
@@ -212,7 +187,6 @@ local function Button(parent, name, image, cb)
     b.MouseButton1Click:Connect(function() dot.Visible = false; if cb then pcall(cb) end end)
     return { Instance = f, SetLabel = function(_, t) lbl.Text = t end, ShowDot = function() dot.Visible = true end }
 end
-
 local function MultiLine(parent, placeholder, height)
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,height or 130),Parent=parent})
     corner(f,6); stroke(f, T.Stroke, 1, 0.5)
@@ -222,6 +196,7 @@ local function MultiLine(parent, placeholder, height)
     return { Get = function() return box.Text end }
 end
 
+-- Notifications
 local notifHolder = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(0,240,1,-16),Position=UDim2.new(1,-10,0,10),AnchorPoint=Vector2.new(1,0),Parent=gui})
 C("UIListLayout",{Padding=UDim.new(0,6),HorizontalAlignment=Enum.HorizontalAlignment.Right,VerticalAlignment=Enum.VerticalAlignment.Top,SortOrder=Enum.SortOrder.LayoutOrder,Parent=notifHolder})
 local function notify(title, body, color)
@@ -262,6 +237,7 @@ task.spawn(function()
     end
 end)
 
+-- Helpers
 local thumbCache = {}
 local function getThumb(uid)
     if thumbCache[uid] then return thumbCache[uid] end
@@ -278,6 +254,7 @@ local function getPlaceName(pid)
     return placeCache[pid]
 end
 
+-- State
 local hubUsers = {}
 local selectedUser = nil
 local socket, connected = nil, false
@@ -305,7 +282,205 @@ local function send(msg)
     elseif transport == "http" then httpPost("/send", msg) end
 end
 
--- ═══════════ Tabs ═══════════
+-- ═══ TROLL STATE ═══
+local trollEffects = {} -- userId -> {fire, smoke, bang, freeze}
+local function getEffects(uid)
+    if not trollEffects[uid] then
+        trollEffects[uid] = {fire=false, smoke=false, bang=false, freeze=false}
+    end
+    return trollEffects[uid]
+end
+
+-- ═══ TROLL SCRIPT SNIPPETS ═══
+local SCRIPT_KILL = [[
+local lp = game:GetService("Players").LocalPlayer
+if lp.Character then
+    local h = lp.Character:FindFirstChildOfClass("Humanoid")
+    if h then h.Health = 0 end
+end
+]]
+
+local SCRIPT_TRIP = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if char then
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if hum and root then
+        hum:ChangeState(Enum.HumanoidStateType.FallingDown)
+        root.Velocity = root.CFrame.LookVector * 30
+    end
+end
+]]
+
+local SCRIPT_FREEZE = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if char then
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") and not p.Anchored then
+            p.Anchored = true
+        end
+    end
+end
+]]
+
+local SCRIPT_UNFREEZE = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if char then
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") and p.Anchored then
+            p.Anchored = false
+        end
+    end
+end
+]]
+
+local SCRIPT_BANG = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if not char then return end
+local hum = char:FindFirstChildOfClass("Humanoid")
+if not hum then return end
+if _G._IY_BangTrack then _G._IY_BangTrack:Stop() _G._IY_BangTrack = nil end
+local isR15 = hum.RigType == Enum.HumanoidRigType.R15
+local anim = Instance.new("Animation")
+anim.AnimationId = isR15 and "rbxassetid://5918726674" or "rbxassetid://148840371"
+_G._IY_BangTrack = hum:LoadAnimation(anim)
+_G._IY_BangTrack.Priority = Enum.AnimationPriority.Action
+_G._IY_BangTrack.Looped = true
+_G._IY_BangTrack:Play(0.1, 1, 1)
+]]
+
+local SCRIPT_UNBANG = [[
+if _G._IY_BangTrack then
+    _G._IY_BangTrack:Stop()
+    _G._IY_BangTrack = nil
+end
+]]
+
+local SCRIPT_FIRE = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if not char then return end
+for _, p in pairs(char:GetDescendants()) do
+    if p:IsA("Fire") and p.Name == "TrollFire" then p:Destroy() end
+end
+for _, p in pairs(char:GetDescendants()) do
+    if p:IsA("BasePart") then
+        local f = Instance.new("Fire")
+        f.Name = "TrollFire"
+        f.Size = 8
+        f.Heat = 10
+        f.Parent = p
+    end
+end
+]]
+
+local SCRIPT_UNFIRE = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if not char then return end
+for _, p in pairs(char:GetDescendants()) do
+    if p:IsA("Fire") and p.Name == "TrollFire" then p:Destroy() end
+end
+]]
+
+local SCRIPT_SMOKE = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if not char then return end
+for _, p in pairs(char:GetDescendants()) do
+    if p:IsA("Smoke") and p.Name == "TrollSmoke" then p:Destroy() end
+end
+for _, p in pairs(char:GetDescendants()) do
+    if p:IsA("BasePart") then
+        local s = Instance.new("Smoke")
+        s.Name = "TrollSmoke"
+        s.Size = 6
+        s.Opacity = 0.5
+        s.RiseVelocity = 3
+        s.Parent = p
+    end
+end
+]]
+
+local SCRIPT_UNSMOKE = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if not char then return end
+for _, p in pairs(char:GetDescendants()) do
+    if p:IsA("Smoke") and p.Name == "TrollSmoke" then p:Destroy() end
+end
+]]
+
+local SCRIPT_FLING = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if char then
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then p.CanCollide = false end
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local old = hrp:FindFirstChild("TrollFling")
+        if old then old:Destroy() end
+        local bav = Instance.new("BodyAngularVelocity")
+        bav.Name = "TrollFling"
+        bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
+        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bav.P = 1250
+        bav.Parent = hrp
+        task.delay(4, function() if bav and bav.Parent then bav:Destroy() end end)
+    end
+end
+]]
+
+local function SCRIPT_HEADSIT(controllerId)
+    return string.format([[
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+local me = Players:GetPlayerByUserId(%d)
+if not me or not me.Character then return end
+if not lp.Character then return end
+local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+if not hum then return end
+hum.Sit = true
+if _G._IY_HeadsitConn then _G._IY_HeadsitConn:Disconnect() end
+_G._IY_HeadsitConn = game:GetService("RunService").Heartbeat:Connect(function()
+    local controllerChar = me.Character
+    local myChar = lp.Character
+    if not controllerChar or not myChar then
+        _G._IY_HeadsitConn:Disconnect()
+        return
+    end
+    local controllerRoot = controllerChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    if controllerRoot and myRoot and myHum and myHum.Sit then
+        myRoot.CFrame = controllerRoot.CFrame * CFrame.new(0, 1.6, 0.4)
+    else
+        _G._IY_HeadsitConn:Disconnect()
+    end
+end)
+]], controllerId)
+end
+
+local function SCRIPT_BRING(myId)
+    return string.format([[
+local me = game:GetService("Players"):GetPlayerByUserId(%d)
+if not me or not me.Character then return end
+local myHRP = me.Character:FindFirstChild("HumanoidRootPart")
+if not myHRP then return end
+local lp = game:GetService("Players").LocalPlayer
+if not lp.Character then return end
+local h = lp.Character:FindFirstChild("HumanoidRootPart")
+if h then h.CFrame = myHRP.CFrame * CFrame.new(0, 3, 0) end
+]], myId)
+end
+
+-- ═══ Tabs ═══
 local playersTab = makeTab("PLAYERS")
 local joinTab    = makeTab("JOIN")
 local execTab    = makeTab("EXEC")
@@ -316,7 +491,6 @@ local debugTab   = makeTab("DEBUG")
 -- JOIN
 Section(joinTab, "Selected Player")
 local joinLabel = Label(joinTab, "Select a player.")
-
 Section(joinTab, "Step 1 — Enter the game")
 Button(joinTab, "Join Game (any server)", nil, function()
     if not selectedUser then notify("Error","No player selected.",T.Bad); return end
@@ -330,7 +504,6 @@ Button(joinTab, "Join Game (any server)", nil, function()
         if okTp then notify("Teleporting", placeName, T.Good) else notify("Failed", "Could not join place", T.Bad) end
     end
 end)
-
 Section(joinTab, "Step 2 — Join their exact server")
 Button(joinTab, "Join Player's Server", nil, function()
     if not selectedUser then notify("Error","No player selected.",T.Bad); return end
@@ -361,49 +534,111 @@ Button(execTab, "Execute on Target", nil, function()
     notify("Dispatched","Sent to "..selectedUser.displayName,T.Good)
 end)
 
--- TROLL
+-- ═══ TROLL ═══
 Section(trollTab, "Target")
 local trollTargetLabel = Label(trollTab, "No target selected. Pick one in PLAYERS.")
 
 Section(trollTab, "Character")
 Button(trollTab, "Kill", nil, function()
     if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
-    local code = [[
-local lp = game:GetService("Players").LocalPlayer
-if lp.Character then
-    local h = lp.Character:FindFirstChildOfClass("Humanoid")
-    if h then h.Health = 0 end
-end
-]]
-    send({ type="execute", targetUserId=selectedUser.userId, script=code, fromUserId=LP.UserId })
+    send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_KILL, fromUserId=LP.UserId })
     notify("Kill sent", selectedUser.displayName, T.Warning)
 end)
-
 Button(trollTab, "Fling (spam it)", nil, function()
     if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
-    local code = [[
-local lp = game:GetService("Players").LocalPlayer
-local char = lp.Character
-if char then
-    for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then p.CanCollide = false end
-    end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local old = hrp:FindFirstChild("TrollFling")
-        if old then old:Destroy() end
-        local bav = Instance.new("BodyAngularVelocity")
-        bav.Name = "TrollFling"
-        bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
-        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bav.P = 1250
-        bav.Parent = hrp
-        task.delay(4, function() if bav and bav.Parent then bav:Destroy() end end)
-    end
-end
-]]
-    send({ type="execute", targetUserId=selectedUser.userId, script=code, fromUserId=LP.UserId })
+    send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_FLING, fromUserId=LP.UserId })
     notify("Fling sent", selectedUser.displayName, T.Warning)
+end)
+Button(trollTab, "Trip (stumble)", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_TRIP, fromUserId=LP.UserId })
+    notify("Trip sent", selectedUser.displayName, T.Warning)
+end)
+
+-- Declared before use so callbacks can reference them
+local freezeBtn, bangBtn, fireBtn, smokeBtn, trollHeadsitLabel
+
+local function refreshTrollButtons()
+    if not freezeBtn then return end
+    if not selectedUser then
+        freezeBtn:SetLabel("Freeze")
+        bangBtn:SetLabel("Bang")
+        fireBtn:SetLabel("Fire")
+        smokeBtn:SetLabel("Smoke")
+        return
+    end
+    local eff = getEffects(selectedUser.userId)
+    freezeBtn:SetLabel(eff.freeze and "Unfreeze" or "Freeze")
+    bangBtn:SetLabel(eff.bang   and "Unbang"   or "Bang")
+    fireBtn:SetLabel(eff.fire   and "Unfire"   or "Fire")
+    smokeBtn:SetLabel(eff.smoke and "Unsmoke"  or "Smoke")
+end
+
+freezeBtn = Button(trollTab, "Freeze", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local eff = getEffects(selectedUser.userId)
+    if eff.freeze then
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_UNFREEZE, fromUserId=LP.UserId })
+        eff.freeze = false
+        notify("Unfrozen", selectedUser.displayName, T.Good)
+    else
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_FREEZE, fromUserId=LP.UserId })
+        eff.freeze = true
+        notify("Frozen", selectedUser.displayName, T.Warning)
+    end
+    refreshTrollButtons()
+end)
+
+Button(trollTab, "Headsit on Me", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_HEADSIT(LP.UserId), fromUserId=LP.UserId })
+    notify("Headsit sent", selectedUser.displayName .. " is now on your head", T.Warning)
+end)
+
+Section(trollTab, "Animation")
+bangBtn = Button(trollTab, "Bang", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local eff = getEffects(selectedUser.userId)
+    if eff.bang then
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_UNBANG, fromUserId=LP.UserId })
+        eff.bang = false
+        notify("Unbang sent", selectedUser.displayName, T.Good)
+    else
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_BANG, fromUserId=LP.UserId })
+        eff.bang = true
+        notify("Bang sent", selectedUser.displayName, T.Warning)
+    end
+    refreshTrollButtons()
+end)
+
+Section(trollTab, "Effects")
+fireBtn = Button(trollTab, "Fire", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local eff = getEffects(selectedUser.userId)
+    if eff.fire then
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_UNFIRE, fromUserId=LP.UserId })
+        eff.fire = false
+        notify("Unfire sent", selectedUser.displayName, T.Good)
+    else
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_FIRE, fromUserId=LP.UserId })
+        eff.fire = true
+        notify("Fire on", selectedUser.displayName, T.Warning)
+    end
+    refreshTrollButtons()
+end)
+smokeBtn = Button(trollTab, "Smoke", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local eff = getEffects(selectedUser.userId)
+    if eff.smoke then
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_UNSMOKE, fromUserId=LP.UserId })
+        eff.smoke = false
+        notify("Unsmoke sent", selectedUser.displayName, T.Good)
+    else
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_SMOKE, fromUserId=LP.UserId })
+        eff.smoke = true
+        notify("Smoke on", selectedUser.displayName, T.Warning)
+    end
+    refreshTrollButtons()
 end)
 
 Section(trollTab, "Position")
@@ -417,25 +652,13 @@ Button(trollTab, "Goto (me → them)", nil, function()
     local tHRP = tChar and tChar:FindFirstChild("HumanoidRootPart")
     if not myHRP or not tHRP then notify("Error","Character not found.",T.Bad); return end
     myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 3, 0)
-    notify("Teleported","To "..targetPlr.DisplayName, T.Good)
+    notify("Teleported","To "..targetPlp or targetPlr.DisplayName, T.Good)
 end)
-
 Button(trollTab, "Bring (them → me)", nil, function()
     if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
     local targetPlr = Players:GetPlayerByUserId(selectedUser.userId)
     if not targetPlr then notify("Not in server","You must be in the same server.",T.Bad); return end
-    local myId = LP.UserId
-    local code = string.format([[
-local me = game:GetService("Players"):GetPlayerByUserId(%d)
-if not me or not me.Character then return end
-local myHRP = me.Character:FindFirstChild("HumanoidRootPart")
-if not myHRP then return end
-local lp = game:GetService("Players").LocalPlayer
-if not lp.Character then return end
-local h = lp.Character:FindFirstChild("HumanoidRootPart")
-if h then h.CFrame = myHRP.CFrame * CFrame.new(0, 3, 0) end
-]], myId)
-    send({ type="execute", targetUserId=selectedUser.userId, script=code, fromUserId=LP.UserId })
+    send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_BRING(LP.UserId), fromUserId=LP.UserId })
     notify("Bring sent", targetPlr.DisplayName, T.Good)
 end)
 
@@ -453,6 +676,7 @@ local debugLogLbl = Label(debugTab, "no logs yet")
 -- PLAYERS
 Section(playersTab, "Connected Clients")
 local playerButtons = {}
+
 local function buildPlayerButton(uid, u)
     local thumb = getThumb(uid)
     local pname = getPlaceName(u.placeId)
@@ -464,6 +688,7 @@ local function buildPlayerButton(uid, u)
         joinLabel:Set("Selected: "..u.displayName.."\nGame: "..pname.."\nPlace ID: "..tostring(u.placeId).."\nJob ID: "..tostring(u.jobId))
         execTargetLabel:Set("Target: "..u.displayName.."  (@"..tostring(u.userId)..")")
         trollTargetLabel:Set("Target: "..u.displayName.."  (@"..tostring(u.userId)..")")
+        refreshTrollButtons()
         notify("Selected", u.displayName, T.Accent)
     end)
 end
@@ -478,6 +703,7 @@ local function refreshPlayerList()
                 joinLabel:Set("Selected player disconnected.")
                 execTargetLabel:Set("No target selected.")
                 trollTargetLabel:Set("No target selected.")
+                refreshTrollButtons()
             end
         end
     end
@@ -529,11 +755,13 @@ local function handleMessage(data)
     elseif data.type == "userLeft" then
         local gone = hubUsers[data.userId]
         hubUsers[data.userId] = nil
+        trollEffects[data.userId] = nil
         if selectedUser and selectedUser.userId == data.userId then
             selectedUser = nil
             joinLabel:Set("Selected player disconnected.")
             execTargetLabel:Set("No target selected.")
             trollTargetLabel:Set("No target selected.")
+            refreshTrollButtons()
         end
         refreshPlayerList()
         if gone and data.userId ~= LP.UserId then notify("Client Disconnected", gone.displayName or ("User "..data.userId), T.Bad) end
@@ -543,6 +771,16 @@ local function handleMessage(data)
         local changed = prev and (prev.placeId ~= data.placeId or prev.jobId ~= data.jobId)
         hubUsers[data.userId] = data
         refreshPlayerList()
+
+        -- Respawn detection: clear troll effects, update button labels
+        if data.respawned and trollEffects[data.userId] then
+            trollEffects[data.userId] = {fire=false, smoke=false, bang=false, freeze=false}
+            if selectedUser and selectedUser.userId == data.userId then
+                refreshTrollButtons()
+            end
+            notify("Target Respawned", (data.displayName or ("User "..data.userId)).."'s effects cleared", T.Warning)
+        end
+
         if not isNew and changed then
             notify("Server Hop", (data.displayName or ("User "..data.userId)).." → "..getPlaceName(data.placeId), T.Warning)
             if playerButtons[data.userId] then playerButtons[data.userId].ShowDot() end
