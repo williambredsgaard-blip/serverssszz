@@ -39,7 +39,6 @@ function bumpExecutions() {
   return stats.executions;
 }
 
-// flush stats on shutdown
 process.on("SIGINT", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
 process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
 
@@ -226,6 +225,7 @@ function serveLua(name) {
 
 app.get("/hubscript.lua",  serveLua("hubscript.lua"));
 app.get("/controller.lua", serveLua("controller.lua"));
+app.get("/ddg.lua",        serveLua("ddg.lua"));
 
 app.get("/files", (req, res) => {
   const found = {};
@@ -258,7 +258,6 @@ app.get("/", (req, res) => {
     position:relative;overflow-x:hidden;
     min-height:100vh;
   }
-  /* animated background layers */
   #bg{position:fixed;inset:0;z-index:0;pointer-events:none}
   .orb{
     position:fixed;border-radius:50%;filter:blur(90px);opacity:0.35;
@@ -282,7 +281,6 @@ app.get("/", (req, res) => {
     position:fixed;inset:0;z-index:0;pointer-events:none;
     background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%);
   }
-  /* content sits above the background */
   .content{position:relative;z-index:1}
   h1{font-size:22px;margin:0 0 4px;color:#fff;
     background:linear-gradient(90deg,#fff,#b9a3ff);
@@ -345,7 +343,6 @@ app.get("/", (req, res) => {
   </div>
 
 <script>
-// ── Constellation particles ──
 (function(){
   const canvas = document.getElementById('bg');
   const ctx = canvas.getContext('2d');
@@ -366,13 +363,12 @@ app.get("/", (req, res) => {
     vx: (Math.random()-0.5)*0.25*DPR,
     vy: (Math.random()-0.5)*0.25*DPR,
     r: (Math.random()*1.4+0.6)*DPR,
-    hue: Math.random() < 0.5 ? 265 : 210  // purple / blue
+    hue: Math.random() < 0.5 ? 265 : 210
   }));
 
   const MAX_D = 150 * DPR;
   function tick(){
     ctx.clearRect(0,0,W,H);
-    // connections
     for(let i=0;i<parts.length;i++){
       const a = parts[i];
       for(let j=i+1;j<parts.length;j++){
@@ -390,7 +386,6 @@ app.get("/", (req, res) => {
         }
       }
     }
-    // dots
     for(const p of parts){
       p.x += p.vx; p.y += p.vy;
       if(p.x<0||p.x>W) p.vx *= -1;
@@ -408,7 +403,6 @@ app.get("/", (req, res) => {
   tick();
 })();
 
-// ── Dashboard data ──
 async function refresh() {
   try {
     const r = await fetch('/clients?t=' + Date.now());
