@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Controller — Delta Hub  (fixed Bang, dual-sided Fire/Smoke)
+--  Controller — Delta Hub  (fixed Bang + Join, dual-sided Fire/Smoke)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -403,12 +403,6 @@ end
 -- ═══════════════════════════════════════════════════════════════
 --  BANG  —  plays anim + continuously follows the controller
 -- ═══════════════════════════════════════════════════════════════
--- Takes the controller's UserId and embeds it into the script string
--- (same pattern as SCRIPT_HEADSIT / SCRIPT_BRING). The target's client
--- looks up the controller via Players:GetPlayerByUserId, then every
--- RunService.Stepped it snaps its HumanoidRootPart.CFrame to the
--- controller's torso CFrame multiplied by an offset of (0, 0, 1.1) —
--- this is exactly how Infinite Yield's bang works.
 local function SCRIPT_BANG(controllerId)
     return string.format([[
 local Players = game:GetService("Players")
@@ -623,6 +617,75 @@ local trollTab   = makeTab("TROLL")
 local outTab     = makeTab("OUTPUT")
 local debugTab   = makeTab("DEBUG")
 
+-- ═══ JOIN HELPER ═══
+-- Tries multiple methods to actually open Roblox on the target place.
+-- GuiSvc:OpenBrowserWindow returns a boolean (true=opened, false=failed),
+-- so we must check the return value, not just whether the call threw.
+local function tryJoinPlace(placeId, jobId)
+    placeId = tonumber(placeId)
+    if not placeId then return false, "invalid placeId" end
+
+    local robloxDeeplink
+    if jobId and jobId ~= "" then
+        robloxDeeplink = "roblox://experiences/start?placeId=" .. tostring(placeId)
+            .. "&gameInstanceId=" .. tostring(jobId)
+    else
+        robloxDeeplink = "roblox://placeId=" .. tostring(placeId)
+    end
+
+    local httpsDeeplink = "https://www.roblox.com/games/start?placeId=" .. tostring(placeId)
+    if jobId and jobId ~= "" then
+        httpsDeeplink = httpsDeeplink .. "&gameInstanceId=" .. tostring(jobId)
+    end
+
+    local attempts = {
+        {
+            name = "GuiSvc roblox://",
+            run = function()
+                if not GuiSvc or not GuiSvc.OpenBrowserWindow then return false end
+                local ok, res = pcall(function() return GuiSvc:OpenBrowserWindow(robloxDeeplink) end)
+                return ok and res == true
+            end
+        },
+        {
+            name = "GuiSvc https",
+            run = function()
+                if not GuiSvc or not GuiSvc.OpenBrowserWindow then return false end
+                local ok, res = pcall(function() return GuiSvc:OpenBrowserWindow(httpsDeeplink) end)
+                return ok and res == true
+            end
+        },
+        {
+            name = "request roblox://",
+            run = function()
+                if not request then return false end
+                local ok = pcall(function() request({Url = robloxDeeplink, Method = "GET"}) end)
+                return ok
+            end
+        },
+        {
+            name = "TeleportService",
+            run = function()
+                local ok = pcall(function()
+                    if jobId and jobId ~= "" then
+                        Teleport:TeleportToPlaceInstance(placeId, jobId, LP)
+                    else
+                        Teleport:Teleport(placeId, LP)
+                    end
+                end)
+                return ok
+            end
+        },
+    }
+
+    for _, a in ipairs(attempts) do
+        local success = a.run()
+        log("[Join] " .. a.name .. " → " .. tostring(success))
+        if success then return true, a.name end
+    end
+    return false, "all methods failed"
+end
+
 -- JOIN
 Section(joinTab, "Selected Player")
 local joinLabel = Label(joinTab, "Select a player.")
@@ -630,28 +693,45 @@ Section(joinTab, "Step 1 — Enter the game")
 Button(joinTab, "Join Game (any server)", nil, function()
     if not selectedUser then notify("Error","No player selected.",T.Bad); return end
     if not selectedUser.placeId or selectedUser.placeId == 0 then notify("Error","No place info available.",T.Bad); return end
+
     local placeName = getPlaceName(selectedUser.placeId)
-    local deeplink = "roblox://placeId=" .. tostring(selectedUser.placeId)
-    local ok = pcall(function() GuiSvc:OpenBrowserWindow(deeplink) end)
-    if ok then notify("Joining Game", "Opening " .. placeName .. "...", T.Good)
+    local ok, method = tryJoinPlace(selectedUser.placeId, nil)
+
+    if ok then
+        notify("Joining Game", "Launching " .. placeName .. " (" .. method .. ")...", T.Good)
     else
-        local okTp = pcall(function() Teleport:Teleport(selectedUser.placeId, LP) end)
-        if okTp then notify("Teleporting", placeName, T.Good) else notify("Failed", "Could not join place", T.Bad) end
+        local cb = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
+        local deeplink = "roblox://placeId=" .. tostring(selectedUser.placeId)
+        if cb then
+            pcall(cb, deeplink)
+            notify("Could Not Auto-Join", "Deeplink copied — paste it in your browser", T.Warning)
+        else
+            notify("Join Failed", "Could not launch " .. placeName, T.Bad)
+        end
     end
 end)
 Section(joinTab, "Step 2 — Join their exact server")
 Button(joinTab, "Join Player's Server", nil, function()
     if not selectedUser then notify("Error","No player selected.",T.Bad); return end
     if not selectedUser.jobId or selectedUser.jobId == "" then notify("Error","No server info.",T.Bad); return end
-    if game.PlaceId ~= selectedUser.placeId then notify("Not in place", "Use 'Join Game (any server)' first.", T.Warning) end
-    local deeplink = "roblox://experiences/start?placeId="..tostring(selectedUser.placeId).."&gameInstanceId="..tostring(selectedUser.jobId)
-    local okDeeplink = pcall(function() GuiSvc:OpenBrowserWindow(deeplink) end)
-    if not okDeeplink then
-        local ok = pcall(function() Teleport:TeleportToPlaceInstance(selectedUser.placeId, selectedUser.jobId, LP) end)
-        if ok then notify("Joining Server", "Connecting to "..selectedUser.displayName.."'s server...", T.Good)
-        else notify("Join Failed", "Restricted or unauthorized.", T.Bad) end
+    if game.PlaceId ~= selectedUser.placeId then
+        notify("Not in place", "Use 'Join Game (any server)' first.", T.Warning)
+    end
+
+    local ok, method = tryJoinPlace(selectedUser.placeId, selectedUser.jobId)
+
+    if ok then
+        notify("Joining Server", "Connecting to " .. selectedUser.displayName .. "'s server (" .. method .. ")...", T.Good)
     else
-        notify("Joining Server", "Launching "..selectedUser.displayName.."'s server...", T.Good)
+        local cb = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
+        local deeplink = "roblox://experiences/start?placeId=" .. tostring(selectedUser.placeId)
+            .. "&gameInstanceId=" .. tostring(selectedUser.jobId)
+        if cb then
+            pcall(cb, deeplink)
+            notify("Could Not Auto-Join", "Deeplink copied — paste it in your browser", T.Warning)
+        else
+            notify("Join Failed", "Restricted or unauthorized.", T.Bad)
+        end
     end
 end)
 
@@ -738,7 +818,6 @@ bangBtn = Button(trollTab, "Bang", nil, function()
         eff.bang = false
         notify("Unbang sent", selectedUser.displayName, T.Good)
     else
-        -- Pass the controller's UserId so the target knows who to follow
         send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_BANG(LP.UserId), fromUserId=LP.UserId })
         eff.bang = true
         notify("Bang sent", selectedUser.displayName .. " is now following you", T.Warning)
