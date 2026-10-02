@@ -140,21 +140,14 @@ local tabBar = C("Frame",{
     Position=UDim2.new(0,0,0,TAB_BAR_Y),
     Size=UDim2.new(1,0,0,TAB_BAR_H),
     BorderSizePixel=0, ZIndex=2, Parent=win,
+    ClipsDescendants = true,
 })
 local tabDivider = C("Frame",{
     BackgroundColor3=T.Stroke2, BackgroundTransparency=0.5,
     Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
     BorderSizePixel=0, ZIndex=3, Parent=tabBar,
 })
-C("UIListLayout",{
-    Padding=UDim.new(0,4),
-    FillDirection=Enum.FillDirection.Horizontal,
-    HorizontalAlignment=Enum.HorizontalAlignment.Left,
-    VerticalAlignment=Enum.VerticalAlignment.Center,
-    SortOrder=Enum.SortOrder.LayoutOrder,
-    Parent=tabBar,
-})
-pad(tabBar, 8, 6)
+local tabX = 8
 
 local content = C("Frame",{
     BackgroundColor3=T.Bg, BackgroundTransparency=0.4,
@@ -176,12 +169,14 @@ local function makeTab(name)
     local btn = C("TextButton",{
         BackgroundColor3=T.Panel, BackgroundTransparency=0.3,
         Size=UDim2.new(0,w,0,22),
+        Position=UDim2.new(0,tabX,0.5,-11),
         Font=Enum.Font.GothamBold, Text=name, TextColor3=T.Dim, TextTransparency=0.2, TextSize=10,
         AutoButtonColor=false, BorderSizePixel=0, Parent=tabBar,
         TextXAlignment=Enum.TextXAlignment.Center,
     })
     corner(btn,6)
     local bStroke = stroke(btn, T.Stroke, 1, 0.6)
+    tabX = tabX + w + 4
 
     local page = C("CanvasGroup",{
         BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
@@ -364,7 +359,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  BACKEND  (unchanged)
+--  BACKEND
 -- ═══════════════════════════════════════════════════════════════
 if loadstring then
     local transport = nil
