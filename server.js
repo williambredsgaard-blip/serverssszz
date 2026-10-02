@@ -9,10 +9,26 @@ app.use(express.json());
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const wsClients = new Map();   // ws -> info
-const httpClients = new Map(); // userId -> { info, queue }
+const wsClients = new Map();
+const httpClients = new Map();
 
-const STALE_MS = 5_000;  // HTTP clients considered gone after 5s of silence
+const STALE_MS = 5_000;
+
+// Where to look for .lua files
+const LUA_SEARCH_PATHS = [
+  __dirname,
+  path.join(__dirname, "scripts"),
+  path.join(__dirname, "public"),
+  process.cwd(),
+];
+
+function findLuaFile(name) {
+  for (const dir of LUA_SEARCH_PATHS) {
+    const full = path.join(dir, name);
+    if (fs.existsSync(full)) return full;
+  }
+  return null;
+}
 
 function userListPayload() {
   const users = [];
@@ -29,7 +45,7 @@ function broadcast(obj, excludeWs) {
   for (const [ws] of wsClients) {
     if (ws !== excludeWs && ws.readyState === 1) ws.send(msg);
   }
-  for (const [uid, entry] of httpClients) {
+  for (const [, entry] of httpClients) {
     entry.queue.push(obj);
     if (entry.queue.length > 200) entry.queue.splice(0, entry.queue.length - 200);
   }
@@ -84,7 +100,6 @@ wss.on("connection", (ws) => {
   });
 });
 
-// HTTP polling
 app.get("/poll", (req, res) => {
   const uid = parseInt(req.query.userId);
   if (!uid) return res.json({ messages: [], users: userListPayload() });
@@ -130,7 +145,6 @@ app.post("/send", (req, res) => {
   res.json({ ok: true });
 });
 
-// Prune stale HTTP clients periodically and notify WS peers
 setInterval(() => {
   const now = Date.now();
   for (const [uid, entry] of httpClients) {
@@ -141,24 +155,45 @@ setInterval(() => {
   }
 }, 2000);
 
-// Serve scripts for self-requeue
-app.get("/hubscript.lua", (req, res) => {
-  try {
-    const lua = fs.readFileSync(path.join(__dirname, "hubscript.lua"), "utf8");
-    res.set("Content-Type", "text/plain");
-    res.send(lua);
-  } catch { res.status(500).send("-- hubscript.lua missing"); }
+// ─────────── Lua file serving ───────────
+function serveLua(name) {
+  return (req, res) => {
+    const filePath = findLuaFile(name);
+    if (!filePath) {
+      console.error(`[serveLua] ${name} not found. Looked in:`, LUA_SEARCH_PATHS);
+      res.status(404).set("Content-Type", "text/plain")
+         .send(`-- ${name} not found on server. Searched: ${LUA_SEARCH_PATHS.join(", ")}`);
+      return;
+    }
+    try {
+      const lua = fs.readFileSync(filePath, "utf8");
+      res.set("Content-Type", "text/plain");
+      res.send(lua);
+    } catch (e) {
+      console.error(`[serveLua] read error for ${name}:`, e.message);
+      res.status(500).set("Content-Type", "text/plain")
+         .send(`-- error reading ${name}: ${e.message}`);
+    }
+  };
+}
+
+app.get("/hubscript.lua",  serveLua("hubscript.lua"));
+app.get("/controller.lua", serveLua("controller.lua"));
+
+// Diagnostic endpoint — see what files the server can find
+app.get("/files", (req, res) => {
+  const found = {};
+  for (const dir of LUA_SEARCH_PATHS) {
+    try {
+      const entries = fs.readdirSync(dir).filter(f => f.endsWith(".lua") || f.endsWith(".js"));
+      found[dir] = entries;
+    } catch (e) {
+      found[dir] = `error: ${e.message}`;
+    }
+  }
+  res.json({ searchPaths: LUA_SEARCH_PATHS, files: found, cwd: process.cwd(), dirname: __dirname });
 });
 
-app.get("/controller.lua", (req, res) => {
-  try {
-    const lua = fs.readFileSync(path.join(__dirname, "controller.lua"), "utf8");
-    res.set("Content-Type", "text/plain");
-    res.send(lua);
-  } catch { res.status(500).send("-- controller.lua missing"); }
-});
-
-// Dashboard
 app.get("/clients", (req, res) => res.json({ users: userListPayload() }));
 
 app.get("/", (req, res) => {
