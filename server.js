@@ -1,5 +1,7 @@
 const express = require("express");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 
 const app = express();
@@ -7,12 +9,10 @@ app.use(express.json());
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// ws -> info ; info = { userId, displayName, placeId, jobId, gameId, ts, transport: "ws" }
-const wsClients = new Map();
-// userId -> { info, queue: [msg, ...] } ; transport: "http"
-const httpClients = new Map();
+const wsClients = new Map();   // ws -> info
+const httpClients = new Map(); // userId -> { info, queue }
 
-const STALE_MS = 60_000; // HTTP clients considered offline after 60s no poll
+const STALE_MS = 5_000;  // HTTP clients considered gone after 5s of silence
 
 function userListPayload() {
   const users = [];
@@ -26,33 +26,24 @@ function userListPayload() {
 
 function broadcast(obj, excludeWs) {
   const msg = JSON.stringify(obj);
-  for (const [ws, info] of wsClients) {
+  for (const [ws] of wsClients) {
     if (ws !== excludeWs && ws.readyState === 1) ws.send(msg);
   }
-  // Queue to HTTP clients (except sender — sender isn't an HTTP user usually)
   for (const [uid, entry] of httpClients) {
-    if (obj.userId && uid === obj.userId && obj.type === "ping") continue;
     entry.queue.push(obj);
     if (entry.queue.length > 200) entry.queue.splice(0, entry.queue.length - 200);
   }
 }
 
 function deliverTo(targetUserId, obj) {
-  // Try WebSocket first
   for (const [ws, info] of wsClients) {
-    if (info.userId === targetUserId) {
-      if (ws.readyState === 1) {
-        ws.send(JSON.stringify(obj));
-        return true;
-      }
+    if (info.userId === targetUserId && ws.readyState === 1) {
+      ws.send(JSON.stringify(obj));
+      return true;
     }
   }
-  // Fall back to HTTP queue
   const entry = httpClients.get(targetUserId);
-  if (entry) {
-    entry.queue.push(obj);
-    return true;
-  }
+  if (entry) { entry.queue.push(obj); return true; }
   return false;
 }
 
@@ -72,22 +63,16 @@ wss.on("connection", (ws) => {
     else if (data.type === "ping") {
       Object.assign(self, data, { ts: Date.now() });
       ws.send(JSON.stringify({ type: "pong", userId: data.userId }));
-      // Broadcast location ping to peers
       const msg = JSON.stringify({ type: "ping", ...data });
       for (const [otherWs, otherInfo] of wsClients) {
         if (otherWs !== ws && otherInfo.userId && otherWs.readyState === 1) otherWs.send(msg);
       }
-      for (const [uid, entry] of httpClients) {
-        entry.queue.push({ type: "ping", ...data });
-      }
+      for (const [, entry] of httpClients) entry.queue.push({ type: "ping", ...data });
     }
     else if (data.type === "requestUserList") {
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
     }
-    else if (data.type === "execute") {
-      deliverTo(data.targetUserId, data);
-    }
-    else if (data.type === "output") {
+    else if (data.type === "execute" || data.type === "output") {
       deliverTo(data.targetUserId, data);
     }
   });
@@ -99,20 +84,18 @@ wss.on("connection", (ws) => {
   });
 });
 
-// ============ HTTP POLLING TRANSPORT ============
+// HTTP polling
 app.get("/poll", (req, res) => {
   const uid = parseInt(req.query.userId);
-  if (!uid) return res.json({ messages: [] });
+  if (!uid) return res.json({ messages: [], users: userListPayload() });
 
   let entry = httpClients.get(uid);
   if (!entry) {
     entry = { info: { userId: uid, ts: Date.now(), transport: "http" }, queue: [] };
     httpClients.set(uid, entry);
-    // Notify WS clients that a new HTTP client joined
     broadcast({ type: "userJoined", ...entry.info }, null);
   }
 
-  // If ping params sent, update info
   if (req.query.displayName) {
     entry.info.displayName = String(req.query.displayName);
     entry.info.placeId = parseInt(req.query.placeId) || 0;
@@ -128,20 +111,54 @@ app.get("/poll", (req, res) => {
 app.post("/send", (req, res) => {
   const msg = req.body;
   if (!msg || !msg.type) return res.json({ ok: false });
-  if (msg.type === "output" || msg.type === "execute") {
+
+  if (msg.type === "execute" || msg.type === "output") {
     deliverTo(msg.targetUserId, msg);
-  } else if (msg.type === "ping" || msg.type === "identify") {
-    // Update HTTP client record
+    return res.json({ ok: true });
+  }
+  if (msg.type === "ping" || msg.type === "identify") {
     const entry = httpClients.get(msg.userId);
     if (entry) {
       Object.assign(entry.info, msg, { ts: Date.now() });
       broadcast(msg, null);
     }
+    return res.json({ ok: true });
+  }
+  if (msg.type === "requestUserList") {
+    return res.json({ ok: true, users: userListPayload() });
   }
   res.json({ ok: true });
 });
 
-// ============ WEB DASHBOARD ============
+// Prune stale HTTP clients periodically and notify WS peers
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, entry] of httpClients) {
+    if (now - entry.info.ts > STALE_MS) {
+      httpClients.delete(uid);
+      broadcast({ type: "userLeft", userId: uid }, null);
+    }
+  }
+}, 2000);
+
+// Serve scripts for self-requeue
+app.get("/hubscript.lua", (req, res) => {
+  try {
+    const lua = fs.readFileSync(path.join(__dirname, "hubscript.lua"), "utf8");
+    res.set("Content-Type", "text/plain");
+    res.send(lua);
+  } catch { res.status(500).send("-- hubscript.lua missing"); }
+});
+
+app.get("/controller.lua", (req, res) => {
+  try {
+    const lua = fs.readFileSync(path.join(__dirname, "controller.lua"), "utf8");
+    res.set("Content-Type", "text/plain");
+    res.send(lua);
+  } catch { res.status(500).send("-- controller.lua missing"); }
+});
+
+// Dashboard
 app.get("/clients", (req, res) => res.json({ users: userListPayload() }));
 
 app.get("/", (req, res) => {
@@ -150,22 +167,22 @@ app.get("/", (req, res) => {
 <html><head><meta charset="utf-8"><title>Delta Hub Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  * { box-sizing: border-box; }
-  body { background:#121216; color:#eee; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin:0; padding:24px; }
-  h1 { font-size:20px; margin:0 0 4px; color:#fff; }
-  .sub { color:#8a8a9a; font-size:13px; margin-bottom:24px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; max-width:1200px; }
-  .card { background:#1c1c22; border:1px solid #2e2e38; border-radius:10px; padding:14px; display:flex; gap:12px; align-items:center; transition:background .2s; }
-  .card:hover { background:#22222a; }
-  .av { width:56px; height:56px; border-radius:8px; background:#2a2a34; flex-shrink:0; }
-  .meta { min-width:0; flex:1; }
-  .name { font-weight:600; color:#fff; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .game { color:#9a9aaa; font-size:12px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; text-transform:uppercase; margin-top:6px; }
-  .ws { background:#1e3a2a; color:#7ddd9f; }
-  .http { background:#3a2f1e; color:#ddd47f; }
-  .empty { color:#666; padding:40px; text-align:center; grid-column:1/-1; }
-  .pill { position:fixed; top:24px; right:24px; background:#1c1c22; border:1px solid #2e2e38; padding:6px 12px; border-radius:20px; font-size:12px; color:#8a8a9a; }
+  *{box-sizing:border-box}
+  body{background:#121216;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:24px}
+  h1{font-size:20px;margin:0 0 4px;color:#fff}
+  .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;max-width:1200px}
+  .card{background:#1c1c22;border:1px solid #2e2e38;border-radius:10px;padding:14px;display:flex;gap:12px;align-items:center;transition:background .2s}
+  .card:hover{background:#22222a}
+  .av{width:56px;height:56px;border-radius:8px;background:#2a2a34;flex-shrink:0}
+  .meta{min-width:0;flex:1}
+  .name{font-weight:600;color:#fff;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .game{color:#9a9aaa;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;margin-top:6px}
+  .ws{background:#1e3a2a;color:#7ddd9f}
+  .http{background:#3a2f1e;color:#ddd47f}
+  .empty{color:#666;padding:40px;text-align:center;grid-column:1/-1}
+  .pill{position:fixed;top:24px;right:24px;background:#1c1c22;border:1px solid #2e2e38;padding:6px 12px;border-radius:20px;font-size:12px;color:#8a8a9a}
 </style></head>
 <body>
   <h1>Delta Hub Dashboard</h1>
@@ -175,7 +192,7 @@ app.get("/", (req, res) => {
 <script>
 async function refresh() {
   try {
-    const r = await fetch('/clients');
+    const r = await fetch('/clients?t=' + Date.now());
     const data = await r.json();
     const users = data.users || [];
     document.getElementById('count').textContent = users.length + ' online';
@@ -202,7 +219,7 @@ async function refresh() {
   }
 }
 refresh();
-setInterval(refresh, 3000);
+setInterval(refresh, 2000);
 </script></body></html>`);
 });
 
