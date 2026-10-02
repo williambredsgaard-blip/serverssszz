@@ -1,8 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════
---  Controller — Delta Hub  (horizontal tabs + glass)
+--  Controller — Delta Hub  (with Troll tab)
 -- ═══════════════════════════════════════════════════════════════
 
--- ─────────── Auto-requeue on teleport ───────────
 do
     local SELF_URL = "https://serverssszz.onrender.com/controller.lua"
     local requeue = 'repeat task.wait() until game:IsLoaded() '
@@ -28,113 +27,68 @@ local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
 assert(loadstring, "Delta required (loadstring missing).")
 
--- ═══════════ Theme ═══════════
 local T = {
-    Bg      = Color3.fromRGB(18,18,22),
-    Panel   = Color3.fromRGB(28,28,34),
-    Panel2  = Color3.fromRGB(33,33,40),
-    Hover   = Color3.fromRGB(52,52,64),
-    Accent  = Color3.fromRGB(120,90,255),
-    Accent2 = Color3.fromRGB(150,120,255),
-    Text    = Color3.fromRGB(238,238,242),
-    Dim     = Color3.fromRGB(150,150,165),
-    Stroke  = Color3.fromRGB(70,70,82),
-    Stroke2 = Color3.fromRGB(50,50,60),
-    Good    = Color3.fromRGB(85,200,120),
-    Bad     = Color3.fromRGB(230,90,90),
-    Warning = Color3.fromRGB(230,180,90),
-    Shadow  = Color3.fromRGB(0,0,0),
-    Glass   = Color3.fromRGB(24,24,30),
+    Bg=Color3.fromRGB(18,18,22), Panel=Color3.fromRGB(28,28,34), Panel2=Color3.fromRGB(33,33,40),
+    Hover=Color3.fromRGB(52,52,64), Accent=Color3.fromRGB(120,90,255),
+    Text=Color3.fromRGB(238,238,242), Dim=Color3.fromRGB(150,150,165),
+    Stroke=Color3.fromRGB(70,70,82), Stroke2=Color3.fromRGB(50,50,60),
+    Good=Color3.fromRGB(85,200,120), Bad=Color3.fromRGB(230,90,90),
+    Warning=Color3.fromRGB(230,180,90), Shadow=Color3.fromRGB(0,0,0),
+    Glass=Color3.fromRGB(24,24,30),
 }
-
--- ═══════════ Helpers ═══════════
 local function C(c,p) local i=Instance.new(c) for k,v in pairs(p or {}) do if k~="Parent" then i[k]=v end end if p and p.Parent then i.Parent=p.Parent end return i end
 local function corner(p,r) return C("UICorner",{CornerRadius=UDim.new(0,r or 5),Parent=p}) end
 local function stroke(p,c,t,tr) return C("UIStroke",{Color=c or T.Stroke,Thickness=t or 1,Transparency=tr or 0,Parent=p}) end
 local function pad(p,n,t) return C("UIPadding",{PaddingTop=UDim.new(0,t or n),PaddingBottom=UDim.new(0,t or n),PaddingLeft=UDim.new(0,n),PaddingRight=UDim.new(0,n),Parent=p}) end
 local function tw(o,info,props) local t=TweenService:Create(o,info,props); t:Play(); return t end
-
 local QI = TweenInfo.new(0.15, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 -- ═══════════ Window ═══════════
-local gui = C("ScreenGui",{Name="DeltaController",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
-
-local shadow = C("Frame",{
-    BackgroundColor3=T.Shadow, BackgroundTransparency=1,
-    Size=UDim2.new(0,500,0,360),
-    Position=UDim2.new(0.5,-250,0.5,-166),
-    ZIndex=0, Parent=gui,
+local gui = C("ScreenGui",{
+    Name="DeltaController", ResetOnSpawn=false, IgnoreGuiInset=true,
+    ZIndexBehavior=Enum.ZIndexBehavior.Sibling, Parent=LP:WaitForChild("PlayerGui"),
 })
+
+local shadow = C("Frame",{BackgroundColor3=T.Shadow,BackgroundTransparency=1,Size=UDim2.new(0,500,0,360),Position=UDim2.new(0.5,-250,0.5,-166),ZIndex=0,Parent=gui})
 corner(shadow,14)
 
-local win = C("Frame",{
-    BackgroundColor3=T.Glass,
-    Size=UDim2.new(0,480,0,340),
-    Position=UDim2.new(0.5,-240,0.5,-170),
-    BackgroundTransparency=1, ZIndex=1, Parent=gui,
-})
-corner(win,10)
-stroke(win, T.Stroke, 1, 0.4)
+local win = C("Frame",{BackgroundColor3=T.Glass,Size=UDim2.new(0,480,0,340),Position=UDim2.new(0.5,-240,0.5,-170),BackgroundTransparency=1,ZIndex=1,Parent=gui})
+corner(win,10); stroke(win, T.Stroke, 1, 0.4)
 
--- Titlebar
-local titleBar = C("Frame",{
-    BackgroundColor3=T.Panel, BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,26), BorderSizePixel=0, ZIndex=2, Parent=win,
-})
+local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,26),BorderSizePixel=0,ZIndex=2,Parent=win})
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
-local titleDivider = C("Frame",{
-    BackgroundColor3=T.Stroke2, BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
-    BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 
-local titleLbl = C("TextLabel",{
-    BackgroundTransparency=1, Position=UDim2.new(0,14,0,0),
-    Size=UDim2.new(0,220,1,0), Font=Enum.Font.GothamBold,
-    Text="Delta Controller", TextColor3=T.Text, TextTransparency=1, TextSize=12,
-    TextXAlignment=Enum.TextXAlignment.Left, ZIndex=3, Parent=titleBar,
-})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(0,220,1,0),Font=Enum.Font.GothamBold,Text="Delta Controller",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
--- Status
-local statusDot = C("Frame",{
-    BackgroundColor3=T.Dim, BackgroundTransparency=1,
-    Size=UDim2.new(0,6,0,6), Position=UDim2.new(1,-160,0.5,-3),
-    BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+local statusDot = C("Frame",{BackgroundColor3=T.Dim,BackgroundTransparency=1,Size=UDim2.new(0,6,0,6),Position=UDim2.new(1,-160,0.5,-3),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(statusDot,3)
-local statusLbl = C("TextLabel",{
-    BackgroundTransparency=1, Position=UDim2.new(1,-150,0,0),
-    Size=UDim2.new(0,120,1,0), Font=Enum.Font.Gotham,
-    Text="starting...", TextColor3=T.Dim, TextTransparency=1, TextSize=10,
-    TextXAlignment=Enum.TextXAlignment.Left, ZIndex=3, Parent=titleBar,
-})
+local statusLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(1,-150,0,0),Size=UDim2.new(0,120,1,0),Font=Enum.Font.Gotham,Text="starting...",TextColor3=T.Dim,TextTransparency=1,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
--- Minimize button
-local minBtn = C("TextButton",{
-    BackgroundColor3=T.Hover, BackgroundTransparency=1,
-    Size=UDim2.new(0,20,0,20), Position=UDim2.new(1,-46,0.5,-10),
-    Font=Enum.Font.GothamBold, Text="□", TextColor3=T.Text, TextTransparency=1, TextSize=11,
-    AutoButtonColor=false, BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
 minBtn.MouseEnter:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Hover}) end)
 minBtn.MouseLeave:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Panel}) end)
 
--- Close button
-local closeBtn = C("TextButton",{
-    BackgroundColor3=T.Bad, BackgroundTransparency=1,
-    Size=UDim2.new(0,20,0,20), Position=UDim2.new(1,-24,0.5,-10),
-    Font=Enum.Font.GothamBold, Text="×", TextColor3=T.Text, TextTransparency=1, TextSize=13,
-    AutoButtonColor=false, BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+-- X button: hides only, script stays injected
+local closeBtn = C("TextButton",{BackgroundColor3=T.Bad,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-24,0.5,-10),Font=Enum.Font.GothamBold,Text="×",TextColor3=T.Text,TextTransparency=1,TextSize=13,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(closeBtn,5)
 closeBtn.MouseEnter:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Bad}) end)
 closeBtn.MouseLeave:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Panel}) end)
-closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+closeBtn.MouseButton1Click:Connect(function()
+    gui.Enabled = false
+end)
 
--- Dragging
+-- Toggle visibility back with RightShift (only you know this)
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        gui.Enabled = not gui.Enabled
+    end
+end)
+
 local dragging,dragStart,startPos
 titleBar.InputBegan:Connect(function(input)
     if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
@@ -155,59 +109,31 @@ end)
 local TAB_BAR_Y = 26
 local TAB_BAR_H = 30
 
-local tabBar = C("Frame",{
-    BackgroundColor3=T.Panel, BackgroundTransparency=0.4,
-    Position=UDim2.new(0,0,0,TAB_BAR_Y),
-    Size=UDim2.new(1,0,0,TAB_BAR_H),
-    BorderSizePixel=0, ZIndex=2, Parent=win,
-    ClipsDescendants = true,
-})
-local tabDivider = C("Frame",{
-    BackgroundColor3=T.Stroke2, BackgroundTransparency=0.5,
-    Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
-    BorderSizePixel=0, ZIndex=3, Parent=tabBar,
-})
+local tabBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y),Size=UDim2.new(1,0,0,TAB_BAR_H),BorderSizePixel=0,ZIndex=2,Parent=win,ClipsDescendants=true})
+local tabDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=0.5,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=tabBar})
 local tabX = 8
 
-local content = C("Frame",{
-    BackgroundColor3=T.Bg, BackgroundTransparency=0.4,
-    Position=UDim2.new(0,0,0,TAB_BAR_Y+TAB_BAR_H),
-    Size=UDim2.new(1,0,1,-(TAB_BAR_Y+TAB_BAR_H)),
-    BorderSizePixel=0, ZIndex=2, Parent=win,
-})
+local content = C("Frame",{BackgroundColor3=T.Bg,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y+TAB_BAR_H),Size=UDim2.new(1,0,1,-(TAB_BAR_Y+TAB_BAR_H)),BorderSizePixel=0,ZIndex=2,Parent=win})
 
 local pages = {}
 local function makeTab(name)
     local measure = Instance.new("TextLabel")
-    measure.Text = name
-    measure.Font = Enum.Font.GothamBold
-    measure.TextSize = 10
-    measure.Parent = gui
+    measure.Text = name; measure.Font = Enum.Font.GothamBold; measure.TextSize = 10; measure.Parent = gui
     local w = math.max(measure.TextBounds.X + 22, 50)
     measure:Destroy()
 
     local btn = C("TextButton",{
         BackgroundColor3=T.Panel, BackgroundTransparency=0.3,
-        Size=UDim2.new(0,w,0,22),
-        Position=UDim2.new(0,tabX,0.5,-11),
+        Size=UDim2.new(0,w,0,22), Position=UDim2.new(0,tabX,0.5,-11),
         Font=Enum.Font.GothamBold, Text=name, TextColor3=T.Dim, TextTransparency=0.2, TextSize=10,
-        AutoButtonColor=false, BorderSizePixel=0, Parent=tabBar,
-        TextXAlignment=Enum.TextXAlignment.Center,
+        AutoButtonColor=false, BorderSizePixel=0, Parent=tabBar, TextXAlignment=Enum.TextXAlignment.Center,
     })
     corner(btn,6)
     local bStroke = stroke(btn, T.Stroke, 1, 0.6)
     tabX = tabX + w + 4
 
-    local page = C("CanvasGroup",{
-        BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
-        GroupTransparency=1, Visible=false, Parent=content,
-    })
-    local scroll = C("ScrollingFrame",{
-        BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
-        BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,0),
-        AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarThickness=3,
-        ScrollBarImageColor3=T.Panel, Parent=page,
-    })
+    local page = C("CanvasGroup",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),GroupTransparency=1,Visible=false,Parent=content})
+    local scroll = C("ScrollingFrame",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),BorderSizePixel=0,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=3,ScrollBarImageColor3=T.Panel,Parent=page})
     pad(scroll,10,8)
     C("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder,Parent=scroll})
 
@@ -227,27 +153,18 @@ local function makeTab(name)
                 p.btn.TextColor3 = T.Dim
                 tw(p.bStroke, CI, {Transparency=0.6, Color=T.Stroke})
                 local t = tw(p.page, CI, {GroupTransparency = 1})
-                t.Completed:Connect(function()
-                    if p.page.GroupTransparency >= 1 then p.page.Visible = false end
-                end)
+                t.Completed:Connect(function() if p.page.GroupTransparency >= 1 then p.page.Visible = false end end)
             end
         end
     end
     btn.MouseButton1Click:Connect(select)
-    btn.MouseEnter:Connect(function()
-        if page.Visible then return end
-        tw(btn, QI, {BackgroundTransparency=0.1})
-    end)
-    btn.MouseLeave:Connect(function()
-        if page.Visible then return end
-        tw(btn, QI, {BackgroundTransparency=0.3})
-    end)
+    btn.MouseEnter:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.1}) end)
+    btn.MouseLeave:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.3}) end)
 
     if #pages == 1 then select() end
     return scroll
 end
 
--- Minimize behavior
 local minimized = false
 local fullSize = UDim2.new(0,480,0,340)
 local miniSize = UDim2.new(0,480,0,26)
@@ -257,13 +174,9 @@ minBtn.MouseButton1Click:Connect(function()
     tw(shadow, CI, {Size = minimized and UDim2.new(0,500,0,46) or UDim2.new(0,500,0,360)})
     minBtn.Text = minimized and "▢" or "□"
     if minimized then
-        tw(tabBar, QI, {BackgroundTransparency=1})
-        tw(content, QI, {BackgroundTransparency=1})
-        tabDivider.Visible = false
+        tw(tabBar, QI, {BackgroundTransparency=1}); tw(content, QI, {BackgroundTransparency=1}); tabDivider.Visible = false
     else
-        tw(tabBar, QI, {BackgroundTransparency=0.4})
-        tw(content, QI, {BackgroundTransparency=0.4})
-        tabDivider.Visible = true
+        tw(tabBar, QI, {BackgroundTransparency=0.4}); tw(content, QI, {BackgroundTransparency=0.4}); tabDivider.Visible = true
     end
 end)
 
@@ -275,18 +188,13 @@ local function Section(parent, text)
 end
 
 local function Label(parent, text)
-    local l = C("TextLabel",{
-        BackgroundTransparency=1, Size=UDim2.new(1,0,0,16),
-        Font=Enum.Font.Gotham, Text=text, TextColor3=T.Text, TextSize=11,
-        TextXAlignment=Enum.TextXAlignment.Left, TextWrapped=true,
-        AutomaticSize=Enum.AutomaticSize.Y, Parent=parent,
-    })
+    local l = C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,16),Font=Enum.Font.Gotham,Text=text,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,AutomaticSize=Enum.AutomaticSize.Y,Parent=parent})
     return { Set = function(_, t) l.Text = t end }
 end
 
 local function Button(parent, name, image, cb)
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,28),Parent=parent})
-    corner(f,6); local fs = stroke(f, T.Stroke, 1, 0.5)
+    corner(f,6); stroke(f, T.Stroke, 1, 0.5)
     local textX = 10; local img
     if image then
         img = C("ImageLabel",{BackgroundTransparency=1,Size=UDim2.new(0,18,0,18),Position=UDim2.new(0,8,0.5,-9),Image=image,Parent=f})
@@ -302,35 +210,20 @@ local function Button(parent, name, image, cb)
     b.MouseButton1Down:Connect(function() tw(f, QI, {BackgroundTransparency=0,BackgroundColor3=T.Accent}) end)
     b.MouseButton1Up:Connect(function() tw(f, QI, {BackgroundTransparency=0.05,BackgroundColor3=T.Hover}) end)
     b.MouseButton1Click:Connect(function() dot.Visible = false; if cb then pcall(cb) end end)
-
-    return {
-        Instance = f,
-        SetLabel = function(_, t) lbl.Text = t end,
-        ShowDot  = function() dot.Visible = true end,
-    }
+    return { Instance = f, SetLabel = function(_, t) lbl.Text = t end, ShowDot = function() dot.Visible = true end }
 end
 
 local function MultiLine(parent, placeholder, height)
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,height or 130),Parent=parent})
     corner(f,6); stroke(f, T.Stroke, 1, 0.5)
-    local box = C("TextBox",{
-        BackgroundTransparency=1, Position=UDim2.new(0,10,0,8),
-        Size=UDim2.new(1,-20,1,-16), Font=Enum.Font.Code,
-        Text="", PlaceholderText=placeholder or "-- script",
-        PlaceholderColor3=T.Dim, TextColor3=T.Text, TextSize=11,
-        TextXAlignment=Enum.TextXAlignment.Left,
-        TextYAlignment=Enum.TextYAlignment.Top,
-        ClearTextOnFocus=false, MultiLine=true, TextWrapped=true, Parent=f,
-    })
+    local box = C("TextBox",{BackgroundTransparency=1,Position=UDim2.new(0,10,0,8),Size=UDim2.new(1,-20,1,-16),Font=Enum.Font.Code,Text="",PlaceholderText=placeholder or "-- script",PlaceholderColor3=T.Dim,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,Parent=f})
     box.Focused:Connect(function() tw(f, QI, {BackgroundTransparency=0.1}) end)
     box.FocusLost:Connect(function() tw(f, QI, {BackgroundTransparency=0.25}) end)
     return { Get = function() return box.Text end }
 end
 
--- ═══════════ Notifications ═══════════
 local notifHolder = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(0,240,1,-16),Position=UDim2.new(1,-10,0,10),AnchorPoint=Vector2.new(1,0),Parent=gui})
 C("UIListLayout",{Padding=UDim.new(0,6),HorizontalAlignment=Enum.HorizontalAlignment.Right,VerticalAlignment=Enum.VerticalAlignment.Top,SortOrder=Enum.SortOrder.LayoutOrder,Parent=notifHolder})
-
 local function notify(title, body, color)
     color = color or T.Accent
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.15,Size=UDim2.new(1,-6,0,48),Position=UDim2.new(1,24,0,0),Parent=notifHolder})
@@ -354,7 +247,6 @@ local function setStatus(state, text)
     statusLbl.Text = text or state
 end
 
--- ═══════════ Fade-in intro ═══════════
 task.spawn(function()
     tw(win, CI, {BackgroundTransparency = 0.15})
     tw(shadow, CI, {BackgroundTransparency = 0.55})
@@ -366,14 +258,10 @@ task.spawn(function()
     tw(minBtn, CI, {BackgroundTransparency = 0, TextTransparency = 0})
     tw(closeBtn, CI, {BackgroundTransparency = 0, TextTransparency = 0})
     for _,p in ipairs(pages) do
-        tw(p.btn, CI, {
-            BackgroundTransparency = p.page.Visible and 0 or 0.3,
-            TextTransparency       = p.page.Visible and 0 or 0.2,
-        })
+        tw(p.btn, CI, {BackgroundTransparency = p.page.Visible and 0 or 0.3, TextTransparency = p.page.Visible and 0 or 0.2})
     end
 end)
 
--- ═══════════ Helpers ═══════════
 local thumbCache = {}
 local function getThumb(uid)
     if thumbCache[uid] then return thumbCache[uid] end
@@ -381,7 +269,6 @@ local function getThumb(uid)
     thumbCache[uid] = ok and url or "rbxassetid://0"
     return thumbCache[uid]
 end
-
 local placeCache = {}
 local function getPlaceName(pid)
     if not pid or pid == 0 then return "Unknown" end
@@ -402,42 +289,31 @@ local function log(msg)
     if #debugLog > 40 then table.remove(debugLog, 1) end
     warn("[Controller] "..tostring(msg))
 end
-
 local function httpPost(path, body)
     if not request then return nil end
-    local ok, resp = pcall(function()
-        return request({Url=RELAY_HTTP..path,Method="POST",Headers={["Content-Type"]="application/json"},Body=HttpService:JSONEncode(body)})
-    end)
-    if ok and resp and resp.Body then
-        local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp.Body)
-        if ok2 then return data end
-    end
+    local ok, resp = pcall(function() return request({Url=RELAY_HTTP..path,Method="POST",Headers={["Content-Type"]="application/json"},Body=HttpService:JSONEncode(body)}) end)
+    if ok and resp and resp.Body then local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp.Body); if ok2 then return data end end
     return nil
 end
 local function httpGet(path)
     local ok, resp = pcall(function() return game:HttpGet(RELAY_HTTP..path) end)
-    if ok and resp and resp ~= "" then
-        local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp)
-        if ok2 then return data end
-    end
+    if ok and resp and resp ~= "" then local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp); if ok2 then return data end end
     return nil
 end
 local function send(msg)
-    if transport == "ws" and socket and connected then
-        pcall(function() socket:Send(HttpService:JSONEncode(msg)) end)
-    elseif transport == "http" then
-        httpPost("/send", msg)
-    end
+    if transport == "ws" and socket and connected then pcall(function() socket:Send(HttpService:JSONEncode(msg)) end)
+    elseif transport == "http" then httpPost("/send", msg) end
 end
 
 -- ═══════════ Tabs ═══════════
 local playersTab = makeTab("PLAYERS")
 local joinTab    = makeTab("JOIN")
 local execTab    = makeTab("EXEC")
+local trollTab   = makeTab("TROLL")
 local outTab     = makeTab("OUTPUT")
 local debugTab   = makeTab("DEBUG")
 
--- ─── JOIN ───
+-- JOIN
 Section(joinTab, "Selected Player")
 local joinLabel = Label(joinTab, "Select a player.")
 
@@ -451,8 +327,7 @@ Button(joinTab, "Join Game (any server)", nil, function()
     if ok then notify("Joining Game", "Opening " .. placeName .. "...", T.Good)
     else
         local okTp = pcall(function() Teleport:Teleport(selectedUser.placeId, LP) end)
-        if okTp then notify("Teleporting", placeName, T.Good)
-        else notify("Failed", "Could not join place "..tostring(selectedUser.placeId), T.Bad) end
+        if okTp then notify("Teleporting", placeName, T.Good) else notify("Failed", "Could not join place", T.Bad) end
     end
 end)
 
@@ -460,11 +335,8 @@ Section(joinTab, "Step 2 — Join their exact server")
 Button(joinTab, "Join Player's Server", nil, function()
     if not selectedUser then notify("Error","No player selected.",T.Bad); return end
     if not selectedUser.jobId or selectedUser.jobId == "" then notify("Error","No server info.",T.Bad); return end
-    if game.PlaceId ~= selectedUser.placeId then
-        notify("Not in place", "Use 'Join Game (any server)' first.", T.Warning)
-    end
-    local deeplink = "roblox://experiences/start?placeId="..tostring(selectedUser.placeId)
-        .."&gameInstanceId="..tostring(selectedUser.jobId)
+    if game.PlaceId ~= selectedUser.placeId then notify("Not in place", "Use 'Join Game (any server)' first.", T.Warning) end
+    local deeplink = "roblox://experiences/start?placeId="..tostring(selectedUser.placeId).."&gameInstanceId="..tostring(selectedUser.jobId)
     local okDeeplink = pcall(function() GuiSvc:OpenBrowserWindow(deeplink) end)
     if not okDeeplink then
         local ok = pcall(function() Teleport:TeleportToPlaceInstance(selectedUser.placeId, selectedUser.jobId, LP) end)
@@ -475,7 +347,7 @@ Button(joinTab, "Join Player's Server", nil, function()
     end
 end)
 
--- ─── EXEC ───
+-- EXEC
 Section(execTab, "Target")
 local execTargetLabel = Label(execTab, "No target selected.")
 Section(execTab, "Script")
@@ -489,41 +361,112 @@ Button(execTab, "Execute on Target", nil, function()
     notify("Dispatched","Sent to "..selectedUser.displayName,T.Good)
 end)
 
--- ─── OUTPUT ───
+-- TROLL
+Section(trollTab, "Target")
+local trollTargetLabel = Label(trollTab, "No target selected. Pick one in PLAYERS.")
+
+Section(trollTab, "Character")
+Button(trollTab, "Kill", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local code = [[
+local lp = game:GetService("Players").LocalPlayer
+if lp.Character then
+    local h = lp.Character:FindFirstChildOfClass("Humanoid")
+    if h then h.Health = 0 end
+end
+]]
+    send({ type="execute", targetUserId=selectedUser.userId, script=code, fromUserId=LP.UserId })
+    notify("Kill sent", selectedUser.displayName, T.Warning)
+end)
+
+Button(trollTab, "Fling (spam it)", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local code = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if char then
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then p.CanCollide = false end
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local old = hrp:FindFirstChild("TrollFling")
+        if old then old:Destroy() end
+        local bav = Instance.new("BodyAngularVelocity")
+        bav.Name = "TrollFling"
+        bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
+        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bav.P = 1250
+        bav.Parent = hrp
+        task.delay(4, function() if bav and bav.Parent then bav:Destroy() end end)
+    end
+end
+]]
+    send({ type="execute", targetUserId=selectedUser.userId, script=code, fromUserId=LP.UserId })
+    notify("Fling sent", selectedUser.displayName, T.Warning)
+end)
+
+Section(trollTab, "Position")
+Button(trollTab, "Goto (me → them)", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local targetPlr = Players:GetPlayerByUserId(selectedUser.userId)
+    if not targetPlr then notify("Not in server","You must be in the same server.",T.Bad); return end
+    local myChar = LP.Character
+    local tChar = targetPlr.Character
+    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local tHRP = tChar and tChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP or not tHRP then notify("Error","Character not found.",T.Bad); return end
+    myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 3, 0)
+    notify("Teleported","To "..targetPlr.DisplayName, T.Good)
+end)
+
+Button(trollTab, "Bring (them → me)", nil, function()
+    if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
+    local targetPlr = Players:GetPlayerByUserId(selectedUser.userId)
+    if not targetPlr then notify("Not in server","You must be in the same server.",T.Bad); return end
+    local myId = LP.UserId
+    local code = string.format([[
+local me = game:GetService("Players"):GetPlayerByUserId(%d)
+if not me or not me.Character then return end
+local myHRP = me.Character:FindFirstChild("HumanoidRootPart")
+if not myHRP then return end
+local lp = game:GetService("Players").LocalPlayer
+if not lp.Character then return end
+local h = lp.Character:FindFirstChild("HumanoidRootPart")
+if h then h.CFrame = myHRP.CFrame * CFrame.new(0, 3, 0) end
+]], myId)
+    send({ type="execute", targetUserId=selectedUser.userId, script=code, fromUserId=LP.UserId })
+    notify("Bring sent", targetPlr.DisplayName, T.Good)
+end)
+
+-- OUTPUT
 Section(outTab, "Live Output")
 local outputLabel = Label(outTab, "No output yet.")
 Button(outTab, "Clear", nil, function() outputLabel:Set("—") end)
 
--- ─── DEBUG ───
+-- DEBUG
 Section(debugTab, "Connection")
 local debugInfo = Label(debugTab, "starting...")
 Section(debugTab, "Recent Log")
 local debugLogLbl = Label(debugTab, "no logs yet")
 
--- ─── PLAYERS ───
+-- PLAYERS
 Section(playersTab, "Connected Clients")
 local playerButtons = {}
-
 local function buildPlayerButton(uid, u)
     local thumb = getThumb(uid)
     local pname = getPlaceName(u.placeId)
     local label = u.displayName.." — "..pname
     if uid == LP.UserId then label = label.."  (you)" end
-    if playerButtons[uid] then
-        playerButtons[uid].SetLabel(playerButtons[uid], label)
-        return
-    end
+    if playerButtons[uid] then playerButtons[uid].SetLabel(playerButtons[uid], label); return end
     playerButtons[uid] = Button(playersTab, label, thumb, function()
         selectedUser = u
-        joinLabel:Set("Selected: "..u.displayName
-            .."\nGame: "..pname
-            .."\nPlace ID: "..tostring(u.placeId)
-            .."\nJob ID: "..tostring(u.jobId))
+        joinLabel:Set("Selected: "..u.displayName.."\nGame: "..pname.."\nPlace ID: "..tostring(u.placeId).."\nJob ID: "..tostring(u.jobId))
         execTargetLabel:Set("Target: "..u.displayName.."  (@"..tostring(u.userId)..")")
+        trollTargetLabel:Set("Target: "..u.displayName.."  (@"..tostring(u.userId)..")")
         notify("Selected", u.displayName, T.Accent)
     end)
 end
-
 local function refreshPlayerList()
     for uid, u in pairs(hubUsers) do buildPlayerButton(uid, u) end
     for uid, btn in pairs(playerButtons) do
@@ -534,6 +477,7 @@ local function refreshPlayerList()
                 selectedUser = nil
                 joinLabel:Set("Selected player disconnected.")
                 execTargetLabel:Set("No target selected.")
+                trollTargetLabel:Set("No target selected.")
             end
         end
     end
@@ -561,7 +505,7 @@ Button(refreshBar, "Refresh List", nil, function()
     end
 end)
 
--- ═══════════ Handlers ═══════════
+-- Handlers
 local function handleExecute(msg)
     local fn, compileErr = loadstring(msg.script)
     if fn then
@@ -580,8 +524,7 @@ local function handleMessage(data)
         for _, u in ipairs(data.users or {}) do hubUsers[u.userId] = u end
         refreshPlayerList()
     elseif data.type == "userJoined" then
-        hubUsers[data.userId] = data
-        refreshPlayerList()
+        hubUsers[data.userId] = data; refreshPlayerList()
         if data.userId ~= LP.UserId then notify("Client Connected", data.displayName or ("User "..data.userId), T.Good) end
     elseif data.type == "userLeft" then
         local gone = hubUsers[data.userId]
@@ -590,6 +533,7 @@ local function handleMessage(data)
             selectedUser = nil
             joinLabel:Set("Selected player disconnected.")
             execTargetLabel:Set("No target selected.")
+            trollTargetLabel:Set("No target selected.")
         end
         refreshPlayerList()
         if gone and data.userId ~= LP.UserId then notify("Client Disconnected", gone.displayName or ("User "..data.userId), T.Bad) end
@@ -612,7 +556,6 @@ local function handleMessage(data)
     end
 end
 
--- ═══════════ Transports ═══════════
 local function tryWS()
     if not WebSocket then log("WebSocket not available"); return false end
     log("Attempting WebSocket → "..RELAY_WS)
@@ -630,11 +573,9 @@ local function tryWS()
         handleMessage(data)
     end)
     ws.OnClose:Connect(function()
-        log("WebSocket closed")
-        connected = false
+        log("WebSocket closed"); connected = false
         if transport == "ws" then
-            setStatus("connecting", "reconnecting...")
-            task.wait(5)
+            setStatus("connecting", "reconnecting..."); task.wait(5)
             if not tryWS() then transport = nil; task.spawn(startHTTP) end
         end
     end)
@@ -673,10 +614,7 @@ task.spawn(function()
             task.wait(1)
             local count = 0
             for _ in pairs(hubUsers) do count = count + 1 end
-            debugInfo:Set("Transport: "..(transport or "none")
-                .."\nConnected: "..tostring(connected)
-                .."\nUserID: "..tostring(LP.UserId)
-                .."\nUsers online: "..count)
+            debugInfo:Set("Transport: "..(transport or "none").."\nConnected: "..tostring(connected).."\nUserID: "..tostring(LP.UserId).."\nUsers online: "..count)
             local start = math.max(1, #debugLog - 8)
             local recent = {}
             for i = start, #debugLog do table.insert(recent, debugLog[i]) end
@@ -687,20 +625,12 @@ task.spawn(function()
         end
     end)
     local wsOk = false
-    for i = 1, 3 do
-        if tryWS() then wsOk = true; break end
-        log("WS attempt "..i.." failed, retrying in 2s")
-        task.wait(2)
-    end
-    if not wsOk then
-        log("All WS attempts failed, switching to HTTP")
-        startHTTP()
-    end
+    for i = 1, 3 do if tryWS() then wsOk = true; break end; log("WS attempt "..i.." failed"); task.wait(2) end
+    if not wsOk then log("All WS attempts failed, switching to HTTP"); startHTTP() end
     while true do
         task.wait(15)
         if transport == "ws" then
-            send({type="ping",userId=LP.UserId,displayName=LP.DisplayName,
-                placeId=game.PlaceId,jobId=game.JobId,gameId=game.GameId,ts=os.time()})
+            send({type="ping",userId=LP.UserId,displayName=LP.DisplayName,placeId=game.PlaceId,jobId=game.JobId,gameId=game.GameId,ts=os.time()})
         end
     end
 end)
