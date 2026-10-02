@@ -365,7 +365,10 @@ if loadstring then
         end
     end)
 
-    -- ── NEW: notify controller on respawn so troll effects get cleared ──
+    -- ── Respawn notification ──
+    -- Fires whenever the local player's character respawns. The controller
+    -- uses this to clear any active fire/smoke/bang/freeze state on that user
+    -- and reset the button labels.
     LP.CharacterAdded:Connect(function()
         task.wait(2)
         if connected or transport == "http" then
