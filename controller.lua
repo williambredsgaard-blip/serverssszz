@@ -287,10 +287,8 @@ local function getEffects(uid)
 end
 
 -- ═══ LOCAL (controller-side) FIRE / SMOKE ═══
--- These create the effect on OUR client's view of the target's character.
--- Roblox destroys them automatically when the target respawns (character replaced).
-local localFire = {}   -- userId -> { Fire instances }
-local localSmoke = {}  -- userId -> { Smoke instances }
+local localFire = {}
+local localSmoke = {}
 
 local function applyLocalFire(userId)
     local plr = Players:GetPlayerByUserId(userId)
@@ -402,16 +400,42 @@ if char then
 end
 ]]
 
--- Bang — uses Animator (modern), stops any prior track first.
-local SCRIPT_BANG = [[
-local lp = game:GetService("Players").LocalPlayer
+-- ═══════════════════════════════════════════════════════════════
+--  BANG  —  plays anim + continuously follows the controller
+-- ═══════════════════════════════════════════════════════════════
+-- Takes the controller's UserId and embeds it into the script string
+-- (same pattern as SCRIPT_HEADSIT / SCRIPT_BRING). The target's client
+-- looks up the controller via Players:GetPlayerByUserId, then every
+-- RunService.Stepped it snaps its HumanoidRootPart.CFrame to the
+-- controller's torso CFrame multiplied by an offset of (0, 0, 1.1) —
+-- this is exactly how Infinite Yield's bang works.
+local function SCRIPT_BANG(controllerId)
+    return string.format([[
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
 local char = lp.Character
 if not char then return end
 local hum = char:FindFirstChildOfClass("Humanoid")
 if not hum then return end
-if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() _G._IY_BangTrack:Destroy() end) _G._IY_BangTrack = nil end
+
+-- Cleanup any previous bang on this client
+if _G._IY_BangTrack then
+    pcall(function() _G._IY_BangTrack:Stop() end)
+    pcall(function() _G._IY_BangTrack:Destroy() end)
+    _G._IY_BangTrack = nil
+end
+if _G._IY_BangLoop then
+    pcall(function() _G._IY_BangLoop:Disconnect() end)
+    _G._IY_BangLoop = nil
+end
+
+-- Load animation (R6 vs R15)
 local animator = hum:FindFirstChildOfClass("Animator")
-if not animator then animator = Instance.new("Animator"); animator.Parent = hum end
+if not animator then
+    animator = Instance.new("Animator")
+    animator.Parent = hum
+end
 local anim = Instance.new("Animation")
 if hum.RigType == Enum.HumanoidRigType.R15 then
     anim.AnimationId = "rbxassetid://5918726674"
@@ -429,7 +453,31 @@ pcall(function() track:Play(0.1, 1, 1) end)
 pcall(function() track:AdjustSpeed(3) end)
 _G._IY_BangTrack = track
 _G._IY_BangAnim = anim
-]]
+
+-- Follow the controller
+local controller = Players:GetPlayerByUserId(%d)
+if not controller then return end
+
+local offset = CFrame.new(0, 0, 1.1)
+
+_G._IY_BangLoop = RunService.Stepped:Connect(function()
+    local myChar = lp.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local cChar = controller.Character
+    if not cChar then return end
+    local cTorso = cChar:FindFirstChild("Torso")
+        or cChar:FindFirstChild("UpperTorso")
+        or cChar:FindFirstChild("LowerTorso")
+        or cChar:FindFirstChild("HumanoidRootPart")
+    if not cTorso then return end
+
+    myRoot.CFrame = cTorso.CFrame * offset
+end)
+]], controllerId)
+end
 
 local SCRIPT_UNBANG = [[
 if _G._IY_BangTrack then
@@ -440,6 +488,10 @@ end
 if _G._IY_BangAnim then
     pcall(function() _G._IY_BangAnim:Destroy() end)
     _G._IY_BangAnim = nil
+end
+if _G._IY_BangLoop then
+    pcall(function() _G._IY_BangLoop:Disconnect() end)
+    _G._IY_BangLoop = nil
 end
 ]]
 
@@ -686,9 +738,10 @@ bangBtn = Button(trollTab, "Bang", nil, function()
         eff.bang = false
         notify("Unbang sent", selectedUser.displayName, T.Good)
     else
-        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_BANG, fromUserId=LP.UserId })
+        -- Pass the controller's UserId so the target knows who to follow
+        send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_BANG(LP.UserId), fromUserId=LP.UserId })
         eff.bang = true
-        notify("Bang sent", selectedUser.displayName, T.Warning)
+        notify("Bang sent", selectedUser.displayName .. " is now following you", T.Warning)
     end
     refreshTrollButtons()
 end)
@@ -791,7 +844,6 @@ local function refreshPlayerList()
                 trollTargetLabel:Set("No target selected.")
                 refreshTrollButtons()
             end
-            -- clean local effects for this user
             removeLocalFire(uid)
             removeLocalSmoke(uid)
             trollEffects[uid] = nil
@@ -864,7 +916,6 @@ local function handleMessage(data)
         hubUsers[data.userId] = data
         refreshPlayerList()
 
-        -- Respawn detection: clear troll state + local effects
         if data.respawned then
             removeLocalFire(data.userId)
             removeLocalSmoke(data.userId)
