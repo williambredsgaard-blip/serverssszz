@@ -413,7 +413,6 @@ if not char then return end
 local hum = char:FindFirstChildOfClass("Humanoid")
 if not hum then return end
 
--- Cleanup any previous bang on this client
 if _G._IY_BangTrack then
     pcall(function() _G._IY_BangTrack:Stop() end)
     pcall(function() _G._IY_BangTrack:Destroy() end)
@@ -424,7 +423,6 @@ if _G._IY_BangLoop then
     _G._IY_BangLoop = nil
 end
 
--- Load animation (R6 vs R15)
 local animator = hum:FindFirstChildOfClass("Animator")
 if not animator then
     animator = Instance.new("Animator")
@@ -448,7 +446,6 @@ pcall(function() track:AdjustSpeed(3) end)
 _G._IY_BangTrack = track
 _G._IY_BangAnim = anim
 
--- Follow the controller
 local controller = Players:GetPlayerByUserId(%d)
 if not controller then return end
 
@@ -618,71 +615,78 @@ local outTab     = makeTab("OUTPUT")
 local debugTab   = makeTab("DEBUG")
 
 -- ═══ JOIN HELPER ═══
--- Tries multiple methods to actually open Roblox on the target place.
--- GuiSvc:OpenBrowserWindow returns a boolean (true=opened, false=failed),
--- so we must check the return value, not just whether the call threw.
+-- Client-side joining requires TeleportToPlaceInstance(placeId, jobId, player)
+-- with a REAL jobId. We fetch a fresh public jobId from Roblox's servers API.
+local function fetchPublicJobId(placeId)
+    local ok, resp = pcall(function()
+        return game:HttpGet("https://games.roblox.com/v1/games/"..placeId.."/servers/Public?limit=100&excludeFullGames=true")
+    end)
+    if not ok or not resp then
+        log("[Join] fetch jobId failed (HttpGet)")
+        return nil
+    end
+    local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp)
+    if not ok2 or not data or not data.data then
+        log("[Join] fetch jobId failed (decode)")
+        return nil
+    end
+    local valid = {}
+    for _, s in ipairs(data.data) do
+        if s.id and tonumber(s.playing) and tonumber(s.maxPlayers)
+           and tonumber(s.playing) < tonumber(s.maxPlayers) then
+            table.insert(valid, s.id)
+        end
+    end
+    if #valid == 0 then
+        log("[Join] no valid servers found")
+        return nil
+    end
+    return valid[math.random(1, #valid)]
+end
+
 local function tryJoinPlace(placeId, jobId)
     placeId = tonumber(placeId)
     if not placeId then return false, "invalid placeId" end
 
-    local robloxDeeplink
-    if jobId and jobId ~= "" then
-        robloxDeeplink = "roblox://experiences/start?placeId=" .. tostring(placeId)
-            .. "&gameInstanceId=" .. tostring(jobId)
-    else
-        robloxDeeplink = "roblox://placeId=" .. tostring(placeId)
+    -- If no jobId was passed, fetch a fresh public one so TeleportToPlaceInstance works
+    if not jobId or jobId == "" then
+        jobId = fetchPublicJobId(placeId)
+        log("[Join] fetched jobId: "..tostring(jobId))
     end
 
-    local httpsDeeplink = "https://www.roblox.com/games/start?placeId=" .. tostring(placeId)
-    if jobId and jobId ~= "" then
-        httpsDeeplink = httpsDeeplink .. "&gameInstanceId=" .. tostring(jobId)
+    -- Method 1: TeleportToPlaceInstance — the actual working API on modern executors
+    if jobId then
+        local ok = pcall(function()
+            Teleport:TeleportToPlaceInstance(placeId, jobId, LP)
+        end)
+        log("[Join] TeleportToPlaceInstance -> "..tostring(ok))
+        if ok then return true, "TeleportToPlaceInstance" end
     end
 
-    local attempts = {
-        {
-            name = "GuiSvc roblox://",
-            run = function()
-                if not GuiSvc or not GuiSvc.OpenBrowserWindow then return false end
-                local ok, res = pcall(function() return GuiSvc:OpenBrowserWindow(robloxDeeplink) end)
-                return ok and res == true
-            end
-        },
-        {
-            name = "GuiSvc https",
-            run = function()
-                if not GuiSvc or not GuiSvc.OpenBrowserWindow then return false end
-                local ok, res = pcall(function() return GuiSvc:OpenBrowserWindow(httpsDeeplink) end)
-                return ok and res == true
-            end
-        },
-        {
-            name = "request roblox://",
-            run = function()
-                if not request then return false end
-                local ok = pcall(function() request({Url = robloxDeeplink, Method = "GET"}) end)
-                return ok
-            end
-        },
-        {
-            name = "TeleportService",
-            run = function()
-                local ok = pcall(function()
-                    if jobId and jobId ~= "" then
-                        Teleport:TeleportToPlaceInstance(placeId, jobId, LP)
-                    else
-                        Teleport:Teleport(placeId, LP)
-                    end
-                end)
-                return ok
-            end
-        },
-    }
+    -- Method 2: Teleport (may work on some executors that hook it)
+    local ok2 = pcall(function()
+        Teleport:Teleport(placeId, LP)
+    end)
+    log("[Join] Teleport -> "..tostring(ok2))
+    if ok2 then return true, "Teleport" end
 
-    for _, a in ipairs(attempts) do
-        local success = a.run()
-        log("[Join] " .. a.name .. " → " .. tostring(success))
-        if success then return true, a.name end
+    -- Method 3: GuiSvc deeplink (launches Roblox client)
+    local deeplink = jobId
+        and ("roblox://experiences/start?placeId="..placeId.."&gameInstanceId="..jobId)
+        or  ("roblox://placeId="..placeId)
+    if GuiSvc and GuiSvc.OpenBrowserWindow then
+        local ok3, res = pcall(function() return GuiSvc:OpenBrowserWindow(deeplink) end)
+        log("[Join] GuiSvc deeplink -> ok="..tostring(ok3).." res="..tostring(res))
+        if ok3 and res ~= false then return true, "GuiSvc deeplink" end
     end
+
+    -- Method 4: request the deeplink
+    if request then
+        local ok4 = pcall(function() request({Url = deeplink, Method = "GET"}) end)
+        log("[Join] request deeplink -> "..tostring(ok4))
+        if ok4 then return true, "request deeplink" end
+    end
+
     return false, "all methods failed"
 end
 
@@ -695,20 +699,23 @@ Button(joinTab, "Join Game (any server)", nil, function()
     if not selectedUser.placeId or selectedUser.placeId == 0 then notify("Error","No place info available.",T.Bad); return end
 
     local placeName = getPlaceName(selectedUser.placeId)
-    local ok, method = tryJoinPlace(selectedUser.placeId, nil)
+    notify("Joining Game", "Fetching server for " .. placeName .. "...", T.Accent)
 
-    if ok then
-        notify("Joining Game", "Launching " .. placeName .. " (" .. method .. ")...", T.Good)
-    else
-        local cb = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
-        local deeplink = "roblox://placeId=" .. tostring(selectedUser.placeId)
-        if cb then
-            pcall(cb, deeplink)
-            notify("Could Not Auto-Join", "Deeplink copied — paste it in your browser", T.Warning)
+    task.spawn(function()
+        local ok, method = tryJoinPlace(selectedUser.placeId, nil)
+        if ok then
+            notify("Joining Game", "Launching " .. placeName .. " (" .. method .. ")", T.Good)
         else
-            notify("Join Failed", "Could not launch " .. placeName, T.Bad)
+            local cb = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
+            local deeplink = "roblox://placeId=" .. tostring(selectedUser.placeId)
+            if cb then
+                pcall(cb, deeplink)
+                notify("Could Not Auto-Join", "Deeplink copied — paste in browser", T.Warning)
+            else
+                notify("Join Failed", "Could not launch " .. placeName, T.Bad)
+            end
         end
-    end
+    end)
 end)
 Section(joinTab, "Step 2 — Join their exact server")
 Button(joinTab, "Join Player's Server", nil, function()
@@ -721,14 +728,14 @@ Button(joinTab, "Join Player's Server", nil, function()
     local ok, method = tryJoinPlace(selectedUser.placeId, selectedUser.jobId)
 
     if ok then
-        notify("Joining Server", "Connecting to " .. selectedUser.displayName .. "'s server (" .. method .. ")...", T.Good)
+        notify("Joining Server", "Connecting to " .. selectedUser.displayName .. "'s server (" .. method .. ")", T.Good)
     else
         local cb = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
         local deeplink = "roblox://experiences/start?placeId=" .. tostring(selectedUser.placeId)
             .. "&gameInstanceId=" .. tostring(selectedUser.jobId)
         if cb then
             pcall(cb, deeplink)
-            notify("Could Not Auto-Join", "Deeplink copied — paste it in your browser", T.Warning)
+            notify("Could Not Auto-Join", "Deeplink copied — paste in browser", T.Warning)
         else
             notify("Join Failed", "Restricted or unauthorized.", T.Bad)
         end
