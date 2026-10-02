@@ -1,14 +1,12 @@
 const express = require("express");
 const http = require("http");
-const fs = require("fs");
-const path = require("path");
 const WebSocket = require("ws");
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const clients = new Map(); // ws -> { userId, displayName, placeId, jobId }
+const clients = new Map();
 
 function broadcast(obj, exclude) {
   const msg = JSON.stringify(obj);
@@ -37,7 +35,9 @@ wss.on("connection", (ws) => {
       broadcast({ type: "userJoined", ...data }, ws);
     }
     else if (data.type === "ping") {
+      // Ack sender + broadcast to peers so controllers get location updates
       ws.send(JSON.stringify({ type: "pong", userId: data.userId }));
+      broadcast(data, ws);
     }
     else if (data.type === "requestUserList") {
       ws.send(JSON.stringify(userList()));
@@ -45,16 +45,14 @@ wss.on("connection", (ws) => {
     else if (data.type === "execute") {
       for (const [targetWs, info] of clients) {
         if (info.userId === data.targetUserId) {
-          targetWs.send(JSON.stringify(data));
-          break;
+          targetWs.send(JSON.stringify(data)); break;
         }
       }
     }
     else if (data.type === "output") {
       for (const [targetWs, info] of clients) {
         if (info.userId === data.targetUserId) {
-          targetWs.send(JSON.stringify(data));
-          break;
+          targetWs.send(JSON.stringify(data)); break;
         }
       }
     }
@@ -65,17 +63,6 @@ wss.on("connection", (ws) => {
     if (info?.userId) broadcast({ type: "userLeft", userId: info.userId });
     clients.delete(ws);
   });
-});
-
-// Serve the UI library as plain Lua text
-app.get("/customui", (req, res) => {
-  try {
-    const lua = fs.readFileSync(path.join(__dirname, "customui.lua"), "utf8");
-    res.set("Content-Type", "text/plain");
-    res.send(lua);
-  } catch (e) {
-    res.status(500).send("-- customui.lua missing");
-  }
 });
 
 app.get("/", (req, res) => res.send("Delta relay running"));
