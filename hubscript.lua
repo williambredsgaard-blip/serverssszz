@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.3  (horizontal tabs + glass + ESP/Fly)
+--  Universal Hub v3.4  (Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -52,7 +52,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.3",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.4",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -187,7 +187,7 @@ local function Button(parent, name, cb)
 end
 
 -- ═══════════════════════════════════════════════════════════════
---  CHARACTER TRAIT STATE (walk speed / jump power / fly)
+--  CHARACTER TRAIT STATE
 -- ═══════════════════════════════════════════════════════════════
 local TRAITS = {
     walkOn = false,
@@ -213,15 +213,9 @@ LP.CharacterAdded:Connect(function(char)
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  FLY  —  body velocity + body gyro driven by control module
+--  FLY
 -- ═══════════════════════════════════════════════════════════════
-local flyRefs = {
-    bv = nil,
-    bg = nil,
-    conn = nil,
-    charConn = nil,
-    controlModule = nil,
-}
+local flyRefs = { bv=nil, bg=nil, conn=nil, charConn=nil, controlModule=nil }
 
 local function stopFly()
     TRAITS.flyOn = false
@@ -284,10 +278,7 @@ local function startFly()
 
         local bvv = r:FindFirstChild("_UHFlyBV")
         local bgg = r:FindFirstChild("_UHFlyBG")
-        if not bvv or not bgg then
-            -- props got wiped (respawn); rebuild on next frame
-            return
-        end
+        if not bvv or not bgg then return end
 
         h.PlatformStand = true
         local cam = workspace.CurrentCamera
@@ -311,23 +302,55 @@ local function startFly()
 end
 
 -- ═══════════════════════════════════════════════════════════════
---  ESP  —  team-colored boxes, refreshed every 1s
+--  ANTI-AFK
 -- ═══════════════════════════════════════════════════════════════
-local ESP = {
-    on = false,
-    teamCheck = true,
-    container = nil,
-    entries = {},  -- [player] = { box = BoxHandleAdornment, char = Model }
-}
+local antiAfkConn = nil
+local antiAfkDisabledHandlers = {}
 
-local COLOR_TEAM    = Color3.fromRGB(50, 120, 255)   -- blue
-local COLOR_ENEMY   = Color3.fromRGB(255, 50, 50)    -- red
-local COLOR_NEUTRAL = Color3.fromRGB(220, 220, 220)  -- gray (no teams at all)
+local function startAntiAfk()
+    -- Kill any existing internal Idled listeners so the game's kick timer never fires
+    if getconnections then
+        local ok, conns = pcall(getconnections, LP.Idled)
+        if ok and conns then
+            for _, c in ipairs(conns) do
+                pcall(function() c:Disable() end)
+                pcall(function() c:Disconnect() end)
+                table.insert(antiAfkDisabledHandlers, c)
+            end
+        end
+    end
+
+    -- Send a virtual input every time the client fires Idled.
+    -- Roblox resets the 20-minute AFK timer whenever it sees user input.
+    if antiAfkConn then antiAfkConn:Disconnect() end
+    antiAfkConn = LP.Idled:Connect(function()
+        local VIM = game:GetService("VirtualInputManager")
+        if VIM then
+            pcall(function()
+                VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            end)
+        end
+    end)
+end
+
+local function stopAntiAfk()
+    if antiAfkConn then antiAfkConn:Disconnect(); antiAfkConn = nil end
+    antiAfkDisabledHandlers = {}
+end
+
+-- ═══════════════════════════════════════════════════════════════
+--  ESP
+-- ═══════════════════════════════════════════════════════════════
+local ESP = { on=false, teamCheck=true, container=nil, entries={} }
+local COLOR_TEAM    = Color3.fromRGB(50, 120, 255)
+local COLOR_ENEMY   = Color3.fromRGB(255, 50, 50)
+local COLOR_NEUTRAL = Color3.fromRGB(220, 220, 220)
 
 local function isTeammate(player)
     local myTeam = LP.Team
     local theirTeam = player.Team
-    if not myTeam or not theirTeam then return nil end  -- nil = unknown / no teams
+    if not myTeam or not theirTeam then return nil end
     return myTeam == theirTeam
 end
 
@@ -341,9 +364,7 @@ end
 local function ensureContainer()
     if ESP.container and ESP.container.Parent then return ESP.container end
     local parent
-    if gethui then
-        pcall(function() parent = gethui() end)
-    end
+    if gethui then pcall(function() parent = gethui() end) end
     if not parent then parent = game:GetService("CoreGui") end
     local folder = Instance.new("Folder")
     folder.Name = "_UniversalHubESP"
@@ -353,20 +374,17 @@ local function ensureContainer()
 end
 
 local function destroyESP()
-    for plr, entry in pairs(ESP.entries) do
+    for _, entry in pairs(ESP.entries) do
         if entry.box then pcall(function() entry.box:Destroy() end) end
     end
     ESP.entries = {}
-    if ESP.container then
-        pcall(function() ESP.container:ClearAllChildren() end)
-    end
+    if ESP.container then pcall(function() ESP.container:ClearAllChildren() end) end
 end
 
 local function refreshESP()
     if not ESP.on then return end
     local container = ensureContainer()
 
-    -- drop entries for players no longer in the game
     for plr, entry in pairs(ESP.entries) do
         if not plr.Parent then
             if entry.box then pcall(function() entry.box:Destroy() end) end
@@ -381,48 +399,39 @@ local function refreshESP()
             local entry = ESP.entries[plr]
 
             if not hrp then
-                -- target dead / not spawned — remove any existing box
                 if entry and entry.box then
                     pcall(function() entry.box:Destroy() end)
                     ESP.entries[plr] = nil
                 end
             else
                 if not entry or entry.char ~= char or not entry.box.Parent then
-                    -- (re)build the box
                     if entry and entry.box then pcall(function() entry.box:Destroy() end) end
                     local box = Instance.new("BoxHandleAdornment")
                     box.Name = "ESPB_" .. plr.UserId
                     box.Adornee = hrp
                     box.AlwaysOnTop = true
                     box.ZIndex = 10
-                    box.Size = Vector3.new(4, 6, 4)   -- covers the whole character around HRP
+                    box.Size = Vector3.new(4, 6, 4)
                     box.Transparency = 0.5
                     box.Color3 = espColorFor(plr)
                     box.Parent = container
                     ESP.entries[plr] = { box = box, char = char }
                 else
-                    -- update color if their team changed
                     local newColor = espColorFor(plr)
-                    if entry.box.Color3 ~= newColor then
-                        entry.box.Color3 = newColor
-                    end
+                    if entry.box.Color3 ~= newColor then entry.box.Color3 = newColor end
                 end
             end
         end
     end
 end
 
--- kick off the 1-second refresh loop once
 task.spawn(function()
     while true do
         task.wait(1)
-        if ESP.on then
-            pcall(refreshESP)
-        end
+        if ESP.on then pcall(refreshESP) end
     end
 end)
 
--- clean up when a player leaves
 Players.PlayerRemoving:Connect(function(plr)
     local entry = ESP.entries[plr]
     if entry and entry.box then pcall(function() entry.box:Destroy() end) end
@@ -432,9 +441,21 @@ end)
 -- ═══════════════════════════════════════════════════════════════
 --  TABS
 -- ═══════════════════════════════════════════════════════════════
+local mainTab = makeTab("Main")
+local moveTab = makeTab("Movement")
+local espTab  = makeTab("ESP")
+local aboutTab= makeTab("About")
 
 -- ── Main ──
-local mainTab = makeTab("Main")
+Section(mainTab, "Global Stats")
+local execValueLbl
+do
+    local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,44),Parent=mainTab})
+    corner(f,6); stroke(f, T.Stroke, 1, 0.5)
+    C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,12,0,6),Size=UDim2.new(1,-24,0,12),Font=Enum.Font.GothamBold,Text="TOTAL HUB EXECUTIONS",TextColor3=T.Dim,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,Parent=f})
+    execValueLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,12,0,18),Size=UDim2.new(1,-24,0,22),Font=Enum.Font.GothamBold,Text="loading...",TextColor3=T.Accent,TextSize=18,TextXAlignment=Enum.TextXAlignment.Left,Parent=f})
+end
+
 Section(mainTab, "Character")
 Toggle(mainTab, "Infinite Jump", false, function(on)
     if on then
@@ -448,6 +469,9 @@ Toggle(mainTab, "Infinite Jump", false, function(on)
         if _G._infJump then _G._infJump:Disconnect(); _G._infJump = nil end
     end
 end)
+Toggle(mainTab, "Anti AFK", false, function(on)
+    if on then startAntiAfk() else stopAntiAfk() end
+end)
 Toggle(mainTab, "Full Bright", false, function(on)
     local l = game:GetService("Lighting")
     if on then
@@ -460,7 +484,6 @@ Toggle(mainTab, "Full Bright", false, function(on)
 end)
 
 -- ── Movement ──
-local moveTab = makeTab("Movement")
 Section(moveTab, "Speed")
 Toggle(moveTab, "Fast Walk (100)", false, function(on)
     TRAITS.walkOn = on
@@ -489,20 +512,13 @@ Toggle(moveTab, "Fly", false, function(on)
 end)
 
 -- ── ESP ──
-local espTab = makeTab("ESP")
 Section(espTab, "Options")
 Toggle(espTab, "Enable ESP", false, function(on)
     ESP.on = on
-    if on then
-        ensureContainer()
-        refreshESP()
-    else
-        destroyESP()
-    end
+    if on then ensureContainer(); refreshESP() else destroyESP() end
 end)
 Toggle(espTab, "Team Check", true, function(on)
     ESP.teamCheck = on
-    -- apply immediately
     if ESP.on then refreshESP() end
 end)
 Section(espTab, "Info")
@@ -516,12 +532,11 @@ C("TextLabel",{
 })
 
 -- ── About ──
-local aboutTab = makeTab("About")
 Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.3\nby Nebula\n\nFly, ESP, Fast Walk, High Jump.\nNo account data sent.",
+    Text="Universal Hub v3.4\nby Nebula\n\nFly, ESP, Fast Walk, High Jump, Anti-AFK.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
@@ -541,7 +556,61 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  BACKEND (relay — unchanged from your original)
+--  EXECUTION COUNTER — ping server on load, refresh every 15s
+-- ═══════════════════════════════════════════════════════════════
+local function postExecution()
+    if not request then return nil end
+    local ok, resp = pcall(function()
+        return request({
+            Url = RELAY_HTTP .. "/execution",
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode({ userId = LP.UserId, placeId = game.PlaceId }),
+        })
+    end)
+    if not ok or not resp or not resp.Body then return nil end
+    local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp.Body)
+    if ok2 and data and data.count then return data.count end
+    return nil
+end
+
+local function fetchExecutions()
+    local ok, resp = pcall(function()
+        return game:HttpGet(RELAY_HTTP .. "/stats")
+    end)
+    if not ok or not resp or resp == "" then return nil end
+    local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp)
+    if ok2 and data and data.executions then return data.executions end
+    return nil
+end
+
+local function setExecDisplay(n)
+    if execValueLbl and n then
+        pcall(function() execValueLbl.Text = tostring(n) end)
+    end
+end
+
+task.spawn(function()
+    -- Bump the counter for this execution
+    local count = postExecution()
+    if count then
+        setExecDisplay(count)
+    else
+        -- Fall back to a plain read if the POST failed
+        local read = fetchExecutions()
+        if read then setExecDisplay(read) end
+    end
+
+    -- Keep the display fresh
+    while true do
+        task.wait(15)
+        local read = fetchExecutions()
+        if read then setExecDisplay(read) end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+--  BACKEND (relay — unchanged)
 -- ═══════════════════════════════════════════════════════════════
 if loadstring then
     local transport = nil
