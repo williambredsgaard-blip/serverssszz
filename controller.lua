@@ -60,7 +60,6 @@ local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 -- ═══════════ Window ═══════════
 local gui = C("ScreenGui",{Name="DeltaController",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
 
--- Drop shadow (soft glow behind window)
 local shadow = C("Frame",{
     BackgroundColor3=T.Shadow, BackgroundTransparency=1,
     Size=UDim2.new(0,500,0,360),
@@ -69,7 +68,6 @@ local shadow = C("Frame",{
 })
 corner(shadow,14)
 
--- Main window — semi-transparent glass look
 local win = C("Frame",{
     BackgroundColor3=T.Glass,
     Size=UDim2.new(0,480,0,340),
@@ -77,7 +75,7 @@ local win = C("Frame",{
     BackgroundTransparency=1, ZIndex=1, Parent=gui,
 })
 corner(win,10)
-stroke(win, T.Stroke, 1, 0.4)  -- translucent light stroke
+stroke(win, T.Stroke, 1, 0.4)
 
 -- Titlebar
 local titleBar = C("Frame",{
@@ -85,9 +83,7 @@ local titleBar = C("Frame",{
     Size=UDim2.new(1,0,0,26), BorderSizePixel=0, ZIndex=2, Parent=win,
 })
 corner(titleBar,10)
--- trim bottom corners of titlebar so it doesn't round on bottom
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
--- subtle divider between titlebar and tabs
 local titleDivider = C("Frame",{
     BackgroundColor3=T.Stroke2, BackgroundTransparency=1,
     Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
@@ -101,7 +97,7 @@ local titleLbl = C("TextLabel",{
     TextXAlignment=Enum.TextXAlignment.Left, ZIndex=3, Parent=titleBar,
 })
 
--- Status (right side, before buttons)
+-- Status
 local statusDot = C("Frame",{
     BackgroundColor3=T.Dim, BackgroundTransparency=1,
     Size=UDim2.new(0,6,0,6), Position=UDim2.new(1,-160,0.5,-3),
@@ -164,26 +160,15 @@ local tabBar = C("Frame",{
     Position=UDim2.new(0,0,0,TAB_BAR_Y),
     Size=UDim2.new(1,0,0,TAB_BAR_H),
     BorderSizePixel=0, ZIndex=2, Parent=win,
+    ClipsDescendants = true,
 })
--- bottom divider for tab bar
 local tabDivider = C("Frame",{
     BackgroundColor3=T.Stroke2, BackgroundTransparency=0.5,
     Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
     BorderSizePixel=0, ZIndex=3, Parent=tabBar,
 })
+local tabX = 8
 
--- Row layout for tabs
-C("UIListLayout",{
-    Padding=UDim.new(0,4),
-    FillDirection=Enum.FillDirection.Horizontal,
-    HorizontalAlignment=Enum.HorizontalAlignment.Left,
-    VerticalAlignment=Enum.VerticalAlignment.Center,
-    SortOrder=Enum.SortOrder.LayoutOrder,
-    Parent=tabBar,
-})
-pad(tabBar, 8, 6)
-
--- Content area (below tab bar)
 local content = C("Frame",{
     BackgroundColor3=T.Bg, BackgroundTransparency=0.4,
     Position=UDim2.new(0,0,0,TAB_BAR_Y+TAB_BAR_H),
@@ -193,7 +178,6 @@ local content = C("Frame",{
 
 local pages = {}
 local function makeTab(name)
-    -- Measure text width for sizing the pill
     local measure = Instance.new("TextLabel")
     measure.Text = name
     measure.Font = Enum.Font.GothamBold
@@ -205,14 +189,15 @@ local function makeTab(name)
     local btn = C("TextButton",{
         BackgroundColor3=T.Panel, BackgroundTransparency=0.3,
         Size=UDim2.new(0,w,0,22),
+        Position=UDim2.new(0,tabX,0.5,-11),
         Font=Enum.Font.GothamBold, Text=name, TextColor3=T.Dim, TextTransparency=0.2, TextSize=10,
         AutoButtonColor=false, BorderSizePixel=0, Parent=tabBar,
         TextXAlignment=Enum.TextXAlignment.Center,
     })
     corner(btn,6)
     local bStroke = stroke(btn, T.Stroke, 1, 0.6)
+    tabX = tabX + w + 4
 
-    -- Page in a CanvasGroup for fade transitions
     local page = C("CanvasGroup",{
         BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
         GroupTransparency=1, Visible=false, Parent=content,
@@ -232,23 +217,15 @@ local function makeTab(name)
         for _,p in ipairs(pages) do
             local isSel = (p.page == page)
             if isSel then
-                tw(p.btn, CI, {
-                    BackgroundColor3 = T.Panel,
-                    BackgroundTransparency = 0,
-                    TextTransparency = 0,
-                })
+                tw(p.btn, CI, {BackgroundColor3=T.Panel,BackgroundTransparency=0,TextTransparency=0})
                 p.btn.TextColor3 = T.Text
-                tw(p.bStroke, CI, {Transparency = 0.4, Color = T.Accent})
+                tw(p.bStroke, CI, {Transparency=0.4, Color=T.Accent})
                 p.page.Visible = true
                 tw(p.page, CI, {GroupTransparency = 0})
             else
-                tw(p.btn, CI, {
-                    BackgroundColor3 = T.Panel,
-                    BackgroundTransparency = 0.3,
-                    TextTransparency = 0.2,
-                })
+                tw(p.btn, CI, {BackgroundColor3=T.Panel,BackgroundTransparency=0.3,TextTransparency=0.2})
                 p.btn.TextColor3 = T.Dim
-                tw(p.bStroke, CI, {Transparency = 0.6, Color = T.Stroke})
+                tw(p.bStroke, CI, {Transparency=0.6, Color=T.Stroke})
                 local t = tw(p.page, CI, {GroupTransparency = 1})
                 t.Completed:Connect(function()
                     if p.page.GroupTransparency >= 1 then p.page.Visible = false end
@@ -270,7 +247,7 @@ local function makeTab(name)
     return scroll
 end
 
--- ═══════════ Minimize behavior ═══════════
+-- Minimize behavior
 local minimized = false
 local fullSize = UDim2.new(0,480,0,340)
 local miniSize = UDim2.new(0,480,0,26)
@@ -562,7 +539,6 @@ local function refreshPlayerList()
     end
 end
 
--- Refresh button
 local refreshBar = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Parent=playersTab})
 C("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder,Parent=refreshBar})
 Button(refreshBar, "Refresh List", nil, function()
