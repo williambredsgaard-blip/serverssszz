@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.4  (Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
+--  Universal Hub v3.4.1  (Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -52,7 +52,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.4",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.4.1",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -291,7 +291,9 @@ local function startFly()
         end
 
         local camCF = cam.CFrame
-        bvv.Velocity = (camCF.LookVector * (dir.Z * FLY_SPEED))
+        -- dir.Z is -1 for W (forward), +1 for S (backward). Negate it
+        -- so forward actually moves toward LookVector and backward away.
+        bvv.Velocity = (camCF.LookVector * (-dir.Z * FLY_SPEED))
                      + (camCF.RightVector * (dir.X * FLY_SPEED))
     end)
 
@@ -308,7 +310,6 @@ local antiAfkConn = nil
 local antiAfkDisabledHandlers = {}
 
 local function startAntiAfk()
-    -- Kill any existing internal Idled listeners so the game's kick timer never fires
     if getconnections then
         local ok, conns = pcall(getconnections, LP.Idled)
         if ok and conns then
@@ -320,8 +321,6 @@ local function startAntiAfk()
         end
     end
 
-    -- Send a virtual input every time the client fires Idled.
-    -- Roblox resets the 20-minute AFK timer whenever it sees user input.
     if antiAfkConn then antiAfkConn:Disconnect() end
     antiAfkConn = LP.Idled:Connect(function()
         local VIM = game:GetService("VirtualInputManager")
@@ -536,7 +535,7 @@ Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.4\nby Nebula\n\nFly, ESP, Fast Walk, High Jump, Anti-AFK.",
+    Text="Universal Hub v3.4.1\nby Nebula\n\nFly, ESP, Fast Walk, High Jump, Anti-AFK.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
@@ -556,7 +555,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  EXECUTION COUNTER — ping server on load, refresh every 15s
+--  EXECUTION COUNTER
 -- ═══════════════════════════════════════════════════════════════
 local function postExecution()
     if not request then return nil end
@@ -591,17 +590,14 @@ local function setExecDisplay(n)
 end
 
 task.spawn(function()
-    -- Bump the counter for this execution
     local count = postExecution()
     if count then
         setExecDisplay(count)
     else
-        -- Fall back to a plain read if the POST failed
         local read = fetchExecutions()
         if read then setExecDisplay(read) end
     end
 
-    -- Keep the display fresh
     while true do
         task.wait(15)
         local read = fetchExecutions()
