@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.2  (horizontal tabs + glass)
+--  Universal Hub v3.3  (horizontal tabs + glass + ESP/Fly)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -15,6 +15,7 @@ local Players  = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+local RunService  = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
 local RELAY_WS   = "wss://serverssszz.onrender.com"
@@ -22,6 +23,7 @@ local RELAY_HTTP = "https://serverssszz.onrender.com"
 local WebSocket  = WebSocket or (syn and syn.websocket) or nil
 local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
+local gethui     = gethui or (syn and syn.protect_gui and function() end) or nil
 
 local T = {
     Bg=Color3.fromRGB(18,18,22), Panel=Color3.fromRGB(28,28,34), Panel2=Color3.fromRGB(33,33,40),
@@ -50,7 +52,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.2",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.3",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -184,6 +186,254 @@ local function Button(parent, name, cb)
     b.MouseButton1Click:Connect(function() if cb then pcall(cb) end end)
 end
 
+-- ═══════════════════════════════════════════════════════════════
+--  CHARACTER TRAIT STATE (walk speed / jump power / fly)
+-- ═══════════════════════════════════════════════════════════════
+local TRAITS = {
+    walkOn = false,
+    walkSpeed = 100,
+    jumpOn = false,
+    jumpPower = 150,
+    flyOn = false,
+}
+
+local function applyTraits(char)
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if TRAITS.walkOn then hum.WalkSpeed = TRAITS.walkSpeed end
+    if TRAITS.jumpOn then
+        hum.UseJumpPower = true
+        hum.JumpPower = TRAITS.jumpPower
+    end
+end
+
+LP.CharacterAdded:Connect(function(char)
+    task.wait(0.4)
+    applyTraits(char)
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+--  FLY  —  body velocity + body gyro driven by control module
+-- ═══════════════════════════════════════════════════════════════
+local flyRefs = {
+    bv = nil,
+    bg = nil,
+    conn = nil,
+    charConn = nil,
+    controlModule = nil,
+}
+
+local function stopFly()
+    TRAITS.flyOn = false
+    if flyRefs.conn then flyRefs.conn:Disconnect(); flyRefs.conn = nil end
+    if flyRefs.charConn then flyRefs.charConn:Disconnect(); flyRefs.charConn = nil end
+    if flyRefs.bv then pcall(function() flyRefs.bv:Destroy() end); flyRefs.bv = nil end
+    if flyRefs.bg then pcall(function() flyRefs.bg:Destroy() end); flyRefs.bg = nil end
+    local char = LP.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            for _, n in ipairs(root:GetChildren()) do
+                if n.Name == "_UHFlyBV" or n.Name == "_UHFlyBG" then n:Destroy() end
+            end
+        end
+    end
+end
+
+local function startFly()
+    stopFly()
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+
+    pcall(function()
+        flyRefs.controlModule = require(LP.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
+    end)
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "_UHFlyBV"
+    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bv.Velocity = Vector3.new(0, 0, 0)
+    bv.Parent = root
+
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "_UHFlyBG"
+    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bg.P = 9e4
+    bg.D = 50
+    bg.CFrame = workspace.CurrentCamera.CFrame
+    bg.Parent = root
+
+    flyRefs.bv = bv
+    flyRefs.bg = bg
+    TRAITS.flyOn = true
+
+    local FLY_SPEED = 60
+
+    flyRefs.conn = RunService.RenderStepped:Connect(function()
+        if not TRAITS.flyOn then return end
+        local c = LP.Character
+        if not c then return end
+        local r = c:FindFirstChild("HumanoidRootPart")
+        local h = c:FindFirstChildOfClass("Humanoid")
+        if not r or not h then return end
+
+        local bvv = r:FindFirstChild("_UHFlyBV")
+        local bgg = r:FindFirstChild("_UHFlyBG")
+        if not bvv or not bgg then
+            -- props got wiped (respawn); rebuild on next frame
+            return
+        end
+
+        h.PlatformStand = true
+        local cam = workspace.CurrentCamera
+        bgg.CFrame = cam.CFrame
+
+        local dir = Vector3.new(0, 0, 0)
+        if flyRefs.controlModule then
+            local ok, v = pcall(function() return flyRefs.controlModule:GetMoveVector() end)
+            if ok and v then dir = v end
+        end
+
+        local camCF = cam.CFrame
+        bvv.Velocity = (camCF.LookVector * (dir.Z * FLY_SPEED))
+                     + (camCF.RightVector * (dir.X * FLY_SPEED))
+    end)
+
+    flyRefs.charConn = LP.CharacterAdded:Connect(function()
+        task.wait(1)
+        if TRAITS.flyOn then startFly() end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+--  ESP  —  team-colored boxes, refreshed every 1s
+-- ═══════════════════════════════════════════════════════════════
+local ESP = {
+    on = false,
+    teamCheck = true,
+    container = nil,
+    entries = {},  -- [player] = { box = BoxHandleAdornment, char = Model }
+}
+
+local COLOR_TEAM    = Color3.fromRGB(50, 120, 255)   -- blue
+local COLOR_ENEMY   = Color3.fromRGB(255, 50, 50)    -- red
+local COLOR_NEUTRAL = Color3.fromRGB(220, 220, 220)  -- gray (no teams at all)
+
+local function isTeammate(player)
+    local myTeam = LP.Team
+    local theirTeam = player.Team
+    if not myTeam or not theirTeam then return nil end  -- nil = unknown / no teams
+    return myTeam == theirTeam
+end
+
+local function espColorFor(player)
+    if not ESP.teamCheck then return COLOR_NEUTRAL end
+    local same = isTeammate(player)
+    if same == nil then return COLOR_NEUTRAL end
+    return same and COLOR_TEAM or COLOR_ENEMY
+end
+
+local function ensureContainer()
+    if ESP.container and ESP.container.Parent then return ESP.container end
+    local parent
+    if gethui then
+        pcall(function() parent = gethui() end)
+    end
+    if not parent then parent = game:GetService("CoreGui") end
+    local folder = Instance.new("Folder")
+    folder.Name = "_UniversalHubESP"
+    folder.Parent = parent
+    ESP.container = folder
+    return folder
+end
+
+local function destroyESP()
+    for plr, entry in pairs(ESP.entries) do
+        if entry.box then pcall(function() entry.box:Destroy() end) end
+    end
+    ESP.entries = {}
+    if ESP.container then
+        pcall(function() ESP.container:ClearAllChildren() end)
+    end
+end
+
+local function refreshESP()
+    if not ESP.on then return end
+    local container = ensureContainer()
+
+    -- drop entries for players no longer in the game
+    for plr, entry in pairs(ESP.entries) do
+        if not plr.Parent then
+            if entry.box then pcall(function() entry.box:Destroy() end) end
+            ESP.entries[plr] = nil
+        end
+    end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LP then
+            local char = plr.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local entry = ESP.entries[plr]
+
+            if not hrp then
+                -- target dead / not spawned — remove any existing box
+                if entry and entry.box then
+                    pcall(function() entry.box:Destroy() end)
+                    ESP.entries[plr] = nil
+                end
+            else
+                if not entry or entry.char ~= char or not entry.box.Parent then
+                    -- (re)build the box
+                    if entry and entry.box then pcall(function() entry.box:Destroy() end) end
+                    local box = Instance.new("BoxHandleAdornment")
+                    box.Name = "ESPB_" .. plr.UserId
+                    box.Adornee = hrp
+                    box.AlwaysOnTop = true
+                    box.ZIndex = 10
+                    box.Size = Vector3.new(4, 6, 4)   -- covers the whole character around HRP
+                    box.Transparency = 0.5
+                    box.Color3 = espColorFor(plr)
+                    box.Parent = container
+                    ESP.entries[plr] = { box = box, char = char }
+                else
+                    -- update color if their team changed
+                    local newColor = espColorFor(plr)
+                    if entry.box.Color3 ~= newColor then
+                        entry.box.Color3 = newColor
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- kick off the 1-second refresh loop once
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if ESP.on then
+            pcall(refreshESP)
+        end
+    end
+end)
+
+-- clean up when a player leaves
+Players.PlayerRemoving:Connect(function(plr)
+    local entry = ESP.entries[plr]
+    if entry and entry.box then pcall(function() entry.box:Destroy() end) end
+    ESP.entries[plr] = nil
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+--  TABS
+-- ═══════════════════════════════════════════════════════════════
+
+-- ── Main ──
 local mainTab = makeTab("Main")
 Section(mainTab, "Character")
 Toggle(mainTab, "Infinite Jump", false, function(on)
@@ -195,7 +445,7 @@ Toggle(mainTab, "Infinite Jump", false, function(on)
             end
         end)
     else
-        if _G._infJump then _G._infJump:Disconnect(); _G._infJump=nil end
+        if _G._infJump then _G._infJump:Disconnect(); _G._infJump = nil end
     end
 end)
 Toggle(mainTab, "Full Bright", false, function(on)
@@ -209,27 +459,69 @@ Toggle(mainTab, "Full Bright", false, function(on)
     end
 end)
 
+-- ── Movement ──
 local moveTab = makeTab("Movement")
 Section(moveTab, "Speed")
-Toggle(moveTab, "Speed Boost", false, function(on)
+Toggle(moveTab, "Fast Walk (100)", false, function(on)
+    TRAITS.walkOn = on
     local char = LP.Character
-    if char and char:FindFirstChildOfClass("Humanoid") then
-        char:FindFirstChildOfClass("Humanoid").WalkSpeed = on and 32 or 16
-    end
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = on and TRAITS.walkSpeed or 16 end
 end)
-Toggle(moveTab, "High Jump", false, function(on)
+Toggle(moveTab, "High Jump (150)", false, function(on)
+    TRAITS.jumpOn = on
     local char = LP.Character
-    if char and char:FindFirstChildOfClass("Humanoid") then
-        char:FindFirstChildOfClass("Humanoid").JumpHeight = on and 100 or 50
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if on then
+            hum.UseJumpPower = true
+            hum.JumpPower = TRAITS.jumpPower
+        else
+            hum.UseJumpPower = true
+            hum.JumpPower = 50
+        end
     end
 end)
 
+Section(moveTab, "Flight")
+Toggle(moveTab, "Fly", false, function(on)
+    if on then startFly() else stopFly() end
+end)
+
+-- ── ESP ──
+local espTab = makeTab("ESP")
+Section(espTab, "Options")
+Toggle(espTab, "Enable ESP", false, function(on)
+    ESP.on = on
+    if on then
+        ensureContainer()
+        refreshESP()
+    else
+        destroyESP()
+    end
+end)
+Toggle(espTab, "Team Check", true, function(on)
+    ESP.teamCheck = on
+    -- apply immediately
+    if ESP.on then refreshESP() end
+end)
+Section(espTab, "Info")
+C("TextLabel",{
+    BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
+    Font=Enum.Font.Gotham,
+    Text="Boxes refresh every second.\nTeam Check ON:  blue = your team, red = enemy.\nTeam Check OFF: all boxes gray.",
+    TextColor3=T.Dim, TextSize=11, TextWrapped=true,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    TextYAlignment=Enum.TextYAlignment.Top, Parent=espTab,
+})
+
+-- ── About ──
 local aboutTab = makeTab("About")
 Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.2\nby Nebula\n\nLoads local features. No account data sent.",
+    Text="Universal Hub v3.3\nby Nebula\n\nFly, ESP, Fast Walk, High Jump.\nNo account data sent.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
@@ -249,7 +541,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  BACKEND
+--  BACKEND (relay — unchanged from your original)
 -- ═══════════════════════════════════════════════════════════════
 if loadstring then
     local transport = nil
@@ -365,10 +657,6 @@ if loadstring then
         end
     end)
 
-    -- ── Respawn notification ──
-    -- Fires whenever the local player's character respawns. The controller
-    -- uses this to clear any active fire/smoke/bang/freeze state on that user
-    -- and reset the button labels.
     LP.CharacterAdded:Connect(function()
         task.wait(2)
         if connected or transport == "http" then
