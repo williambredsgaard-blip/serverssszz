@@ -2,7 +2,6 @@
 --  Universal Hub v3.2  (horizontal tabs + glass)
 -- ═══════════════════════════════════════════════════════════════
 
--- ─────────── Auto-requeue on teleport ───────────
 do
     local SELF_URL = "https://serverssszz.onrender.com/hubscript.lua"
     local requeue = 'repeat task.wait() until game:IsLoaded() '
@@ -24,97 +23,53 @@ local WebSocket  = WebSocket or (syn and syn.websocket) or nil
 local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
 
--- ═══════════ Theme ═══════════
 local T = {
-    Bg      = Color3.fromRGB(18,18,22),
-    Panel   = Color3.fromRGB(28,28,34),
-    Panel2  = Color3.fromRGB(33,33,40),
-    Hover   = Color3.fromRGB(52,52,64),
-    Accent  = Color3.fromRGB(120,90,255),
-    Text    = Color3.fromRGB(238,238,242),
-    Dim     = Color3.fromRGB(150,150,165),
-    Stroke  = Color3.fromRGB(70,70,82),
-    Stroke2 = Color3.fromRGB(50,50,60),
-    Good    = Color3.fromRGB(85,200,120),
-    Bad     = Color3.fromRGB(230,90,90),
-    Shadow  = Color3.fromRGB(0,0,0),
-    Glass   = Color3.fromRGB(24,24,30),
+    Bg=Color3.fromRGB(18,18,22), Panel=Color3.fromRGB(28,28,34), Panel2=Color3.fromRGB(33,33,40),
+    Hover=Color3.fromRGB(52,52,64), Accent=Color3.fromRGB(120,90,255),
+    Text=Color3.fromRGB(238,238,242), Dim=Color3.fromRGB(150,150,165),
+    Stroke=Color3.fromRGB(70,70,82), Stroke2=Color3.fromRGB(50,50,60),
+    Good=Color3.fromRGB(85,200,120), Bad=Color3.fromRGB(230,90,90),
+    Shadow=Color3.fromRGB(0,0,0), Glass=Color3.fromRGB(24,24,30),
 }
-
--- ═══════════ Helpers ═══════════
 local function C(c,p) local i=Instance.new(c) for k,v in pairs(p or {}) do if k~="Parent" then i[k]=v end end if p and p.Parent then i.Parent=p.Parent end return i end
 local function corner(p,r) return C("UICorner",{CornerRadius=UDim.new(0,r or 5),Parent=p}) end
 local function stroke(p,c,t,tr) return C("UIStroke",{Color=c or T.Stroke,Thickness=t or 1,Transparency=tr or 0,Parent=p}) end
 local function pad(p,n,t) return C("UIPadding",{PaddingTop=UDim.new(0,t or n),PaddingBottom=UDim.new(0,t or n),PaddingLeft=UDim.new(0,n),PaddingRight=UDim.new(0,n),Parent=p}) end
 local function tw(o,info,props) local t=TweenService:Create(o,info,props); t:Play(); return t end
-
 local QI = TweenInfo.new(0.15, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
--- ═══════════ Window ═══════════
+-- Window
 local gui = C("ScreenGui",{Name="UniversalHub",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
-
-local shadow = C("Frame",{
-    BackgroundColor3=T.Shadow, BackgroundTransparency=1,
-    Size=UDim2.new(0,440,0,320),
-    Position=UDim2.new(0.5,-220,0.5,-146),
-    ZIndex=0, Parent=gui,
-})
+local shadow = C("Frame",{BackgroundColor3=T.Shadow,BackgroundTransparency=1,Size=UDim2.new(0,440,0,320),Position=UDim2.new(0.5,-220,0.5,-146),ZIndex=0,Parent=gui})
 corner(shadow,14)
+local win = C("Frame",{BackgroundColor3=T.Glass,Size=UDim2.new(0,420,0,300),Position=UDim2.new(0.5,-210,0.5,-150),BackgroundTransparency=1,ZIndex=1,Parent=gui})
+corner(win,10); stroke(win, T.Stroke, 1, 0.4)
 
-local win = C("Frame",{
-    BackgroundColor3=T.Glass,
-    Size=UDim2.new(0,420,0,300),
-    Position=UDim2.new(0.5,-210,0.5,-150),
-    BackgroundTransparency=1, ZIndex=1, Parent=gui,
-})
-corner(win,10)
-stroke(win, T.Stroke, 1, 0.4)
-
--- Titlebar
-local titleBar = C("Frame",{
-    BackgroundColor3=T.Panel, BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,26), BorderSizePixel=0, ZIndex=2, Parent=win,
-})
+local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,26),BorderSizePixel=0,ZIndex=2,Parent=win})
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
-local titleDivider = C("Frame",{
-    BackgroundColor3=T.Stroke2, BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
-    BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.2",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
-local titleLbl = C("TextLabel",{
-    BackgroundTransparency=1, Position=UDim2.new(0,14,0,0),
-    Size=UDim2.new(1,-70,1,0), Font=Enum.Font.GothamBold,
-    Text="Universal Hub — v3.2", TextColor3=T.Text, TextTransparency=1, TextSize=12,
-    TextXAlignment=Enum.TextXAlignment.Left, ZIndex=3, Parent=titleBar,
-})
-
--- Minimize
-local minBtn = C("TextButton",{
-    BackgroundColor3=T.Hover, BackgroundTransparency=1,
-    Size=UDim2.new(0,20,0,20), Position=UDim2.new(1,-46,0.5,-10),
-    Font=Enum.Font.GothamBold, Text="□", TextColor3=T.Text, TextTransparency=1, TextSize=11,
-    AutoButtonColor=false, BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
 minBtn.MouseEnter:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Hover}) end)
 minBtn.MouseLeave:Connect(function() tw(minBtn,QI,{BackgroundColor3=T.Panel}) end)
 
--- Close
-local closeBtn = C("TextButton",{
-    BackgroundColor3=T.Bad, BackgroundTransparency=1,
-    Size=UDim2.new(0,20,0,20), Position=UDim2.new(1,-24,0.5,-10),
-    Font=Enum.Font.GothamBold, Text="×", TextColor3=T.Text, TextTransparency=1, TextSize=13,
-    AutoButtonColor=false, BorderSizePixel=0, ZIndex=3, Parent=titleBar,
-})
+local closeBtn = C("TextButton",{BackgroundColor3=T.Bad,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-24,0.5,-10),Font=Enum.Font.GothamBold,Text="×",TextColor3=T.Text,TextTransparency=1,TextSize=13,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(closeBtn,5)
 closeBtn.MouseEnter:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Bad}) end)
 closeBtn.MouseLeave:Connect(function() tw(closeBtn,QI,{BackgroundColor3=T.Panel}) end)
-closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+closeBtn.MouseButton1Click:Connect(function() gui.Enabled = false end)
 
--- Drag
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        gui.Enabled = not gui.Enabled
+    end
+end)
+
 local dragging,dragStart,startPos
 titleBar.InputBegan:Connect(function(input)
     if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
@@ -131,68 +86,28 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ═══════════ Horizontal tab bar ═══════════
 local TAB_BAR_Y = 26
 local TAB_BAR_H = 30
-
-local tabBar = C("Frame",{
-    BackgroundColor3=T.Panel, BackgroundTransparency=0.4,
-    Position=UDim2.new(0,0,0,TAB_BAR_Y),
-    Size=UDim2.new(1,0,0,TAB_BAR_H),
-    BorderSizePixel=0, ZIndex=2, Parent=win,
-    ClipsDescendants = true,
-})
-local tabDivider = C("Frame",{
-    BackgroundColor3=T.Stroke2, BackgroundTransparency=0.5,
-    Size=UDim2.new(1,0,0,1), Position=UDim2.new(0,0,1,-1),
-    BorderSizePixel=0, ZIndex=3, Parent=tabBar,
-})
+local tabBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y),Size=UDim2.new(1,0,0,TAB_BAR_H),BorderSizePixel=0,ZIndex=2,Parent=win,ClipsDescendants=true})
+local tabDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=0.5,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=tabBar})
 local tabX = 8
-
-local content = C("Frame",{
-    BackgroundColor3=T.Bg, BackgroundTransparency=0.4,
-    Position=UDim2.new(0,0,0,TAB_BAR_Y+TAB_BAR_H),
-    Size=UDim2.new(1,0,1,-(TAB_BAR_Y+TAB_BAR_H)),
-    BorderSizePixel=0, ZIndex=2, Parent=win,
-})
+local content = C("Frame",{BackgroundColor3=T.Bg,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y+TAB_BAR_H),Size=UDim2.new(1,0,1,-(TAB_BAR_Y+TAB_BAR_H)),BorderSizePixel=0,ZIndex=2,Parent=win})
 
 local pages = {}
 local function makeTab(name)
     local measure = Instance.new("TextLabel")
-    measure.Text = name
-    measure.Font = Enum.Font.GothamBold
-    measure.TextSize = 10
-    measure.Parent = gui
+    measure.Text = name; measure.Font = Enum.Font.GothamBold; measure.TextSize = 10; measure.Parent = gui
     local w = math.max(measure.TextBounds.X + 22, 55)
     measure:Destroy()
-
-    local btn = C("TextButton",{
-        BackgroundColor3=T.Panel, BackgroundTransparency=0.3,
-        Size=UDim2.new(0,w,0,22),
-        Position=UDim2.new(0,tabX,0.5,-11),
-        Font=Enum.Font.GothamBold, Text=name, TextColor3=T.Dim, TextTransparency=0.2, TextSize=10,
-        AutoButtonColor=false, BorderSizePixel=0, Parent=tabBar,
-        TextXAlignment=Enum.TextXAlignment.Center,
-    })
+    local btn = C("TextButton",{BackgroundColor3=T.Panel,BackgroundTransparency=0.3,Size=UDim2.new(0,w,0,22),Position=UDim2.new(0,tabX,0.5,-11),Font=Enum.Font.GothamBold,Text=name,TextColor3=T.Dim,TextTransparency=0.2,TextSize=10,AutoButtonColor=false,BorderSizePixel=0,Parent=tabBar,TextXAlignment=Enum.TextXAlignment.Center})
     corner(btn,6)
     local bStroke = stroke(btn, T.Stroke, 1, 0.6)
     tabX = tabX + w + 4
-
-    local page = C("CanvasGroup",{
-        BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
-        GroupTransparency=1, Visible=false, Parent=content,
-    })
-    local scroll = C("ScrollingFrame",{
-        BackgroundTransparency=1, Size=UDim2.new(1,0,1,0),
-        BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,0),
-        AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarThickness=3,
-        ScrollBarImageColor3=T.Panel, Parent=page,
-    })
+    local page = C("CanvasGroup",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),GroupTransparency=1,Visible=false,Parent=content})
+    local scroll = C("ScrollingFrame",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),BorderSizePixel=0,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=3,ScrollBarImageColor3=T.Panel,Parent=page})
     pad(scroll,10,8)
     C("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder,Parent=scroll})
-
     pages[#pages+1] = {btn=btn,page=page,scroll=scroll,bStroke=bStroke}
-
     local function select()
         for _,p in ipairs(pages) do
             local isSel = (p.page == page)
@@ -207,27 +122,17 @@ local function makeTab(name)
                 p.btn.TextColor3 = T.Dim
                 tw(p.bStroke, CI, {Transparency=0.6, Color=T.Stroke})
                 local t = tw(p.page, CI, {GroupTransparency = 1})
-                t.Completed:Connect(function()
-                    if p.page.GroupTransparency >= 1 then p.page.Visible = false end
-                end)
+                t.Completed:Connect(function() if p.page.GroupTransparency >= 1 then p.page.Visible = false end end)
             end
         end
     end
     btn.MouseButton1Click:Connect(select)
-    btn.MouseEnter:Connect(function()
-        if page.Visible then return end
-        tw(btn, QI, {BackgroundTransparency=0.1})
-    end)
-    btn.MouseLeave:Connect(function()
-        if page.Visible then return end
-        tw(btn, QI, {BackgroundTransparency=0.3})
-    end)
-
+    btn.MouseEnter:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.1}) end)
+    btn.MouseLeave:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.3}) end)
     if #pages == 1 then select() end
     return scroll
 end
 
--- Minimize behavior
 local minimized = false
 local fullSize = UDim2.new(0,420,0,300)
 local miniSize = UDim2.new(0,420,0,26)
@@ -237,23 +142,17 @@ minBtn.MouseButton1Click:Connect(function()
     tw(shadow, CI, {Size = minimized and UDim2.new(0,440,0,46) or UDim2.new(0,440,0,320)})
     minBtn.Text = minimized and "▢" or "□"
     if minimized then
-        tw(tabBar, QI, {BackgroundTransparency=1})
-        tw(content, QI, {BackgroundTransparency=1})
-        tabDivider.Visible = false
+        tw(tabBar, QI, {BackgroundTransparency=1}); tw(content, QI, {BackgroundTransparency=1}); tabDivider.Visible = false
     else
-        tw(tabBar, QI, {BackgroundTransparency=0.4})
-        tw(content, QI, {BackgroundTransparency=0.4})
-        tabDivider.Visible = true
+        tw(tabBar, QI, {BackgroundTransparency=0.4}); tw(content, QI, {BackgroundTransparency=0.4}); tabDivider.Visible = true
     end
 end)
 
--- ═══════════ Widgets ═══════════
 local function Section(parent, text)
     local wrap = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),AutomaticSize=Enum.AutomaticSize.Y,Parent=parent})
     C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),Font=Enum.Font.GothamBold,Text=text:upper(),TextColor3=T.Dim,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,Parent=wrap})
     C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=0.3,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,0,16),BorderSizePixel=0,Parent=wrap})
 end
-
 local function Toggle(parent, name, default, cb)
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,28),Parent=parent})
     corner(f,6); stroke(f, T.Stroke, 1, 0.5)
@@ -271,12 +170,8 @@ local function Toggle(parent, name, default, cb)
     local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Parent=f})
     b.MouseEnter:Connect(function() tw(f, QI, {BackgroundTransparency=0.05,BackgroundColor3=T.Hover}) end)
     b.MouseLeave:Connect(function() tw(f, QI, {BackgroundTransparency=0.25,BackgroundColor3=T.Panel}) end)
-    b.MouseButton1Click:Connect(function()
-        state = not state; render()
-        if cb then pcall(cb, state) end
-    end)
+    b.MouseButton1Click:Connect(function() state = not state; render(); if cb then pcall(cb, state) end end)
 end
-
 local function Button(parent, name, cb)
     local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,28),Parent=parent})
     corner(f,6); stroke(f, T.Stroke, 1, 0.5)
@@ -289,7 +184,6 @@ local function Button(parent, name, cb)
     b.MouseButton1Click:Connect(function() if cb then pcall(cb) end end)
 end
 
--- ═══════════ Tabs ═══════════
 local mainTab = makeTab("Main")
 Section(mainTab, "Character")
 Toggle(mainTab, "Infinite Jump", false, function(on)
@@ -341,7 +235,6 @@ C("TextLabel",{
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
 })
 
--- ═══════════ Fade-in ═══════════
 task.spawn(function()
     tw(win, CI, {BackgroundTransparency = 0.15})
     tw(shadow, CI, {BackgroundTransparency = 0.55})
@@ -351,10 +244,7 @@ task.spawn(function()
     tw(minBtn, CI, {BackgroundTransparency = 0, TextTransparency = 0})
     tw(closeBtn, CI, {BackgroundTransparency = 0, TextTransparency = 0})
     for _,p in ipairs(pages) do
-        tw(p.btn, CI, {
-            BackgroundTransparency = p.page.Visible and 0 or 0.3,
-            TextTransparency       = p.page.Visible and 0 or 0.2,
-        })
+        tw(p.btn, CI, {BackgroundTransparency = p.page.Visible and 0 or 0.3, TextTransparency = p.page.Visible and 0 or 0.2})
     end
 end)
 
@@ -472,6 +362,23 @@ if loadstring then
                         placeId=game.PlaceId,jobId=game.JobId,gameId=game.GameId,ts=os.time()})
                 end
             end
+        end
+    end)
+
+    -- ── NEW: notify controller on respawn so troll effects get cleared ──
+    LP.CharacterAdded:Connect(function()
+        task.wait(2)
+        if connected or transport == "http" then
+            send({
+                type = "ping",
+                userId = LP.UserId,
+                displayName = LP.DisplayName,
+                placeId = game.PlaceId,
+                jobId = game.JobId,
+                gameId = game.GameId,
+                respawned = true,
+                ts = os.time(),
+            })
         end
     end)
 end
