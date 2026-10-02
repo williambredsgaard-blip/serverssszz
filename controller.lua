@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Controller — Delta Hub  (extended Troll tab)
+--  Controller — Delta Hub  (fixed Bang, dual-sided Fire/Smoke)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -95,7 +95,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Tab bar
 local TAB_BAR_Y = 26
 local TAB_BAR_H = 30
 local tabBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.4,Position=UDim2.new(0,0,0,TAB_BAR_Y),Size=UDim2.new(1,0,0,TAB_BAR_H),BorderSizePixel=0,ZIndex=2,Parent=win,ClipsDescendants=true})
@@ -158,7 +157,6 @@ minBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Widgets
 local function Section(parent, text)
     local wrap = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),AutomaticSize=Enum.AutomaticSize.Y,Parent=parent})
     C("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),Font=Enum.Font.GothamBold,Text=text:upper(),TextColor3=T.Dim,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,Parent=wrap})
@@ -196,7 +194,6 @@ local function MultiLine(parent, placeholder, height)
     return { Get = function() return box.Text end }
 end
 
--- Notifications
 local notifHolder = C("Frame",{BackgroundTransparency=1,Size=UDim2.new(0,240,1,-16),Position=UDim2.new(1,-10,0,10),AnchorPoint=Vector2.new(1,0),Parent=gui})
 C("UIListLayout",{Padding=UDim.new(0,6),HorizontalAlignment=Enum.HorizontalAlignment.Right,VerticalAlignment=Enum.VerticalAlignment.Top,SortOrder=Enum.SortOrder.LayoutOrder,Parent=notifHolder})
 local function notify(title, body, color)
@@ -237,7 +234,6 @@ task.spawn(function()
     end
 end)
 
--- Helpers
 local thumbCache = {}
 local function getThumb(uid)
     if thumbCache[uid] then return thumbCache[uid] end
@@ -254,7 +250,6 @@ local function getPlaceName(pid)
     return placeCache[pid]
 end
 
--- State
 local hubUsers = {}
 local selectedUser = nil
 local socket, connected = nil, false
@@ -283,7 +278,7 @@ local function send(msg)
 end
 
 -- ═══ TROLL STATE ═══
-local trollEffects = {} -- userId -> {fire, smoke, bang, freeze}
+local trollEffects = {}
 local function getEffects(uid)
     if not trollEffects[uid] then
         trollEffects[uid] = {fire=false, smoke=false, bang=false, freeze=false}
@@ -291,7 +286,81 @@ local function getEffects(uid)
     return trollEffects[uid]
 end
 
--- ═══ TROLL SCRIPT SNIPPETS ═══
+-- ═══ LOCAL (controller-side) FIRE / SMOKE ═══
+-- These create the effect on OUR client's view of the target's character.
+-- Roblox destroys them automatically when the target respawns (character replaced).
+local localFire = {}   -- userId -> { Fire instances }
+local localSmoke = {}  -- userId -> { Smoke instances }
+
+local function applyLocalFire(userId)
+    local plr = Players:GetPlayerByUserId(userId)
+    if not plr or not plr.Character then return end
+    removeLocalFire(userId)
+    localFire[userId] = {}
+    for _, p in pairs(plr.Character:GetDescendants()) do
+        if p:IsA("BasePart") then
+            local f = Instance.new("Fire")
+            f.Name = "TrollFireCtrl"
+            f.Size = 8
+            f.Heat = 10
+            f.Color = Color3.fromRGB(255, 120, 30)
+            f.SecondaryColor = Color3.fromRGB(255, 220, 120)
+            f.Parent = p
+            table.insert(localFire[userId], f)
+        end
+    end
+end
+
+local function removeLocalFire(userId)
+    if localFire[userId] then
+        for _, f in ipairs(localFire[userId]) do
+            if f and f.Parent then f:Destroy() end
+        end
+    end
+    localFire[userId] = nil
+    local plr = Players:GetPlayerByUserId(userId)
+    if plr and plr.Character then
+        for _, p in pairs(plr.Character:GetDescendants()) do
+            if p:IsA("Fire") and p.Name == "TrollFireCtrl" then p:Destroy() end
+        end
+    end
+end
+
+local function applyLocalSmoke(userId)
+    local plr = Players:GetPlayerByUserId(userId)
+    if not plr or not plr.Character then return end
+    removeLocalSmoke(userId)
+    localSmoke[userId] = {}
+    for _, p in pairs(plr.Character:GetDescendants()) do
+        if p:IsA("BasePart") then
+            local s = Instance.new("Smoke")
+            s.Name = "TrollSmokeCtrl"
+            s.Size = 6
+            s.Opacity = 0.5
+            s.RiseVelocity = 3
+            s.Color = Color3.fromRGB(120, 120, 120)
+            s.Parent = p
+            table.insert(localSmoke[userId], s)
+        end
+    end
+end
+
+local function removeLocalSmoke(userId)
+    if localSmoke[userId] then
+        for _, s in ipairs(localSmoke[userId]) do
+            if s and s.Parent then s:Destroy() end
+        end
+    end
+    localSmoke[userId] = nil
+    local plr = Players:GetPlayerByUserId(userId)
+    if plr and plr.Character then
+        for _, p in pairs(plr.Character:GetDescendants()) do
+            if p:IsA("Smoke") and p.Name == "TrollSmokeCtrl" then p:Destroy() end
+        end
+    end
+end
+
+-- ═══ TROLL SCRIPT SNIPPETS (sent to target) ═══
 local SCRIPT_KILL = [[
 local lp = game:GetService("Players").LocalPlayer
 if lp.Character then
@@ -318,9 +387,7 @@ local lp = game:GetService("Players").LocalPlayer
 local char = lp.Character
 if char then
     for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") and not p.Anchored then
-            p.Anchored = true
-        end
+        if p:IsA("BasePart") and not p.Anchored then p.Anchored = true end
     end
 end
 ]]
@@ -330,33 +397,71 @@ local lp = game:GetService("Players").LocalPlayer
 local char = lp.Character
 if char then
     for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") and p.Anchored then
-            p.Anchored = false
-        end
+        if p:IsA("BasePart") and p.Anchored then p.Anchored = false end
     end
 end
 ]]
 
+-- Bang — uses Animator (modern), stops any prior track first.
 local SCRIPT_BANG = [[
 local lp = game:GetService("Players").LocalPlayer
 local char = lp.Character
 if not char then return end
 local hum = char:FindFirstChildOfClass("Humanoid")
 if not hum then return end
-if _G._IY_BangTrack then _G._IY_BangTrack:Stop() _G._IY_BangTrack = nil end
-local isR15 = hum.RigType == Enum.HumanoidRigType.R15
+if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() _G._IY_BangTrack:Destroy() end) _G._IY_BangTrack = nil end
+local animator = hum:FindFirstChildOfClass("Animator")
+if not animator then animator = Instance.new("Animator"); animator.Parent = hum end
 local anim = Instance.new("Animation")
-anim.AnimationId = isR15 and "rbxassetid://5918726674" or "rbxassetid://148840371"
-_G._IY_BangTrack = hum:LoadAnimation(anim)
-_G._IY_BangTrack.Priority = Enum.AnimationPriority.Action
-_G._IY_BangTrack.Looped = true
-_G._IY_BangTrack:Play(0.1, 1, 1)
+if hum.RigType == Enum.HumanoidRigType.R15 then
+    anim.AnimationId = "rbxassetid://5918726674"
+else
+    anim.AnimationId = "rbxassetid://148840371"
+end
+local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
+if not ok or not track then
+    warn("[Troll Bang] Failed to load animation: " .. tostring(track))
+    return
+end
+track.Priority = Enum.AnimationPriority.Action
+track.Looped = true
+pcall(function() track:Play(0.1, 1, 1) end)
+pcall(function() track:AdjustSpeed(3) end)
+_G._IY_BangTrack = track
+_G._IY_BangAnim = anim
 ]]
 
 local SCRIPT_UNBANG = [[
 if _G._IY_BangTrack then
-    _G._IY_BangTrack:Stop()
+    pcall(function() _G._IY_BangTrack:Stop() end)
+    pcall(function() _G._IY_BangTrack:Destroy() end)
     _G._IY_BangTrack = nil
+end
+if _G._IY_BangAnim then
+    pcall(function() _G._IY_BangAnim:Destroy() end)
+    _G._IY_BangAnim = nil
+end
+]]
+
+local SCRIPT_FLING = [[
+local lp = game:GetService("Players").LocalPlayer
+local char = lp.Character
+if char then
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then p.CanCollide = false end
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local old = hrp:FindFirstChild("TrollFling")
+        if old then old:Destroy() end
+        local bav = Instance.new("BodyAngularVelocity")
+        bav.Name = "TrollFling"
+        bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
+        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bav.P = 1250
+        bav.Parent = hrp
+        task.delay(4, function() if bav and bav.Parent then bav:Destroy() end end)
+    end
 end
 ]]
 
@@ -412,28 +517,6 @@ local char = lp.Character
 if not char then return end
 for _, p in pairs(char:GetDescendants()) do
     if p:IsA("Smoke") and p.Name == "TrollSmoke" then p:Destroy() end
-end
-]]
-
-local SCRIPT_FLING = [[
-local lp = game:GetService("Players").LocalPlayer
-local char = lp.Character
-if char then
-    for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then p.CanCollide = false end
-    end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local old = hrp:FindFirstChild("TrollFling")
-        if old then old:Destroy() end
-        local bav = Instance.new("BodyAngularVelocity")
-        bav.Name = "TrollFling"
-        bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
-        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bav.P = 1250
-        bav.Parent = hrp
-        task.delay(4, function() if bav and bav.Parent then bav:Destroy() end end)
-    end
 end
 ]]
 
@@ -555,8 +638,7 @@ Button(trollTab, "Trip (stumble)", nil, function()
     notify("Trip sent", selectedUser.displayName, T.Warning)
 end)
 
--- Declared before use so callbacks can reference them
-local freezeBtn, bangBtn, fireBtn, smokeBtn, trollHeadsitLabel
+local freezeBtn, bangBtn, fireBtn, smokeBtn
 
 local function refreshTrollButtons()
     if not freezeBtn then return end
@@ -611,18 +693,20 @@ bangBtn = Button(trollTab, "Bang", nil, function()
     refreshTrollButtons()
 end)
 
-Section(trollTab, "Effects")
+Section(trollTab, "Effects (dual-sided)")
 fireBtn = Button(trollTab, "Fire", nil, function()
     if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
     local eff = getEffects(selectedUser.userId)
     if eff.fire then
         send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_UNFIRE, fromUserId=LP.UserId })
+        removeLocalFire(selectedUser.userId)
         eff.fire = false
         notify("Unfire sent", selectedUser.displayName, T.Good)
     else
         send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_FIRE, fromUserId=LP.UserId })
+        applyLocalFire(selectedUser.userId)
         eff.fire = true
-        notify("Fire on", selectedUser.displayName, T.Warning)
+        notify("Fire on (visible to both)", selectedUser.displayName, T.Warning)
     end
     refreshTrollButtons()
 end)
@@ -631,12 +715,14 @@ smokeBtn = Button(trollTab, "Smoke", nil, function()
     local eff = getEffects(selectedUser.userId)
     if eff.smoke then
         send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_UNSMOKE, fromUserId=LP.UserId })
+        removeLocalSmoke(selectedUser.userId)
         eff.smoke = false
         notify("Unsmoke sent", selectedUser.displayName, T.Good)
     else
         send({ type="execute", targetUserId=selectedUser.userId, script=SCRIPT_SMOKE, fromUserId=LP.UserId })
+        applyLocalSmoke(selectedUser.userId)
         eff.smoke = true
-        notify("Smoke on", selectedUser.displayName, T.Warning)
+        notify("Smoke on (visible to both)", selectedUser.displayName, T.Warning)
     end
     refreshTrollButtons()
 end)
@@ -652,7 +738,7 @@ Button(trollTab, "Goto (me → them)", nil, function()
     local tHRP = tChar and tChar:FindFirstChild("HumanoidRootPart")
     if not myHRP or not tHRP then notify("Error","Character not found.",T.Bad); return end
     myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 3, 0)
-    notify("Teleported","To "..targetPlp or targetPlr.DisplayName, T.Good)
+    notify("Teleported","To "..targetPlr.DisplayName, T.Good)
 end)
 Button(trollTab, "Bring (them → me)", nil, function()
     if not selectedUser then notify("No Target","Pick a target in PLAYERS.",T.Bad); return end
@@ -705,6 +791,10 @@ local function refreshPlayerList()
                 trollTargetLabel:Set("No target selected.")
                 refreshTrollButtons()
             end
+            -- clean local effects for this user
+            removeLocalFire(uid)
+            removeLocalSmoke(uid)
+            trollEffects[uid] = nil
         end
     end
 end
@@ -755,6 +845,8 @@ local function handleMessage(data)
     elseif data.type == "userLeft" then
         local gone = hubUsers[data.userId]
         hubUsers[data.userId] = nil
+        removeLocalFire(data.userId)
+        removeLocalSmoke(data.userId)
         trollEffects[data.userId] = nil
         if selectedUser and selectedUser.userId == data.userId then
             selectedUser = nil
@@ -772,8 +864,10 @@ local function handleMessage(data)
         hubUsers[data.userId] = data
         refreshPlayerList()
 
-        -- Respawn detection: clear troll effects, update button labels
-        if data.respawned and trollEffects[data.userId] then
+        -- Respawn detection: clear troll state + local effects
+        if data.respawned then
+            removeLocalFire(data.userId)
+            removeLocalSmoke(data.userId)
             trollEffects[data.userId] = {fire=false, smoke=false, bang=false, freeze=false}
             if selectedUser and selectedUser.userId == data.userId then
                 refreshTrollButtons()
