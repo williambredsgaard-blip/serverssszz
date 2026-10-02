@@ -1,6 +1,7 @@
-// server.js — free relay for Delta Hub
 const express = require("express");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 
 const app = express();
@@ -35,11 +36,12 @@ wss.on("connection", (ws) => {
       ws.send(JSON.stringify(userList()));
       broadcast({ type: "userJoined", ...data }, ws);
     }
-
+    else if (data.type === "ping") {
+      ws.send(JSON.stringify({ type: "pong", userId: data.userId }));
+    }
     else if (data.type === "requestUserList") {
       ws.send(JSON.stringify(userList()));
     }
-
     else if (data.type === "execute") {
       for (const [targetWs, info] of clients) {
         if (info.userId === data.targetUserId) {
@@ -48,7 +50,6 @@ wss.on("connection", (ws) => {
         }
       }
     }
-
     else if (data.type === "output") {
       for (const [targetWs, info] of clients) {
         if (info.userId === data.targetUserId) {
@@ -64,6 +65,17 @@ wss.on("connection", (ws) => {
     if (info?.userId) broadcast({ type: "userLeft", userId: info.userId });
     clients.delete(ws);
   });
+});
+
+// Serve the UI library as plain Lua text
+app.get("/customui", (req, res) => {
+  try {
+    const lua = fs.readFileSync(path.join(__dirname, "customui.lua"), "utf8");
+    res.set("Content-Type", "text/plain");
+    res.send(lua);
+  } catch (e) {
+    res.status(500).send("-- customui.lua missing");
+  }
 });
 
 app.get("/", (req, res) => res.send("Delta relay running"));
