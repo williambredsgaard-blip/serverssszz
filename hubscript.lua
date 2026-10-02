@@ -36,7 +36,7 @@ local function corner(p,r) return C("UICorner",{CornerRadius=UDim.new(0,r or 5),
 local function stroke(p,c) return C("UIStroke",{Color=c or T.Stroke,Thickness=1,Parent=p}) end
 local function pad(p,n) return C("UIPadding",{PaddingTop=UDim.new(0,n),PaddingBottom=UDim.new(0,n),PaddingLeft=UDim.new(0,n),PaddingRight=UDim.new(0,n),Parent=p}) end
 
--- ─────────── Compact window (was 560x380, now 420x300) ───────────
+-- ─────────── Compact window (420x300) ───────────
 local gui = C("ScreenGui",{Name="UniversalHub",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
 local win = C("Frame",{BackgroundColor3=T.Bg,Size=UDim2.new(0,420,0,300),Position=UDim2.new(0.5,-210,0.5,-150),Parent=gui})
 corner(win,8); stroke(win)
@@ -64,10 +64,16 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ─────────── Narrow tab rail (was 120, now 80) ───────────
+-- ─────────── Tab rail (aligned to top) ───────────
 local tabsFrame = C("Frame",{BackgroundColor3=T.Bg,Position=UDim2.new(0,0,0,26),Size=UDim2.new(0,80,1,-26),BorderSizePixel=0,Parent=win})
 C("Frame",{BackgroundColor3=T.Stroke,Size=UDim2.new(0,1,1,-8),Position=UDim2.new(1,-1,0,4),BorderSizePixel=0,Parent=tabsFrame})
-C("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder,Parent=tabsFrame})
+C("UIListLayout",{
+    Padding=UDim.new(0,4),
+    SortOrder=Enum.SortOrder.LayoutOrder,
+    HorizontalAlignment=Enum.HorizontalAlignment.Center,
+    VerticalAlignment=Enum.VerticalAlignment.Top,
+    Parent=tabsFrame,
+})
 pad(tabsFrame,6)
 local content = C("Frame",{BackgroundTransparency=1,Position=UDim2.new(0,80,0,26),Size=UDim2.new(1,-80,1,-26),Parent=win})
 local pages = {}
