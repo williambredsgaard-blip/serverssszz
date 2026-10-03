@@ -1393,13 +1393,26 @@ app.get("/", (req, res) => {
   .stat .value{font-size:22px;font-weight:700;color:#fff;margin-top:2px;position:relative}
   .stat .value.accent{color:#c5b3ff;text-shadow:0 0 20px rgba(140,105,255,0.5)}
 
+  /* ── Grid: fixed row height, no stretch, scroll when overflowing ── */
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+    grid-auto-rows:96px;              /* every card slot is exactly 96px tall */
     gap:14px;
     width:100%;
-    min-height:360px;
+    align-content:start;              /* stop rows from stretching to fill height */
+    max-height:460px;                 /* where scrolling kicks in */
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding-right:6px;                /* breathing room for the scrollbar */
+    scrollbar-width:thin;
+    scrollbar-color:rgba(120,90,255,0.4) rgba(28,28,34,0.4);
   }
+  .grid::-webkit-scrollbar{width:8px}
+  .grid::-webkit-scrollbar-track{background:rgba(28,28,34,0.4);border-radius:4px}
+  .grid::-webkit-scrollbar-thumb{background:rgba(120,90,255,0.4);border-radius:4px}
+  .grid::-webkit-scrollbar-thumb:hover{background:rgba(120,90,255,0.65)}
+
   .card{
     background:rgba(28,28,34,0.6);
     backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
@@ -1408,6 +1421,7 @@ app.get("/", (req, res) => {
     display:flex;gap:14px;align-items:center;
     transition:transform .2s cubic-bezier(.2,.9,.3,1.1),border-color .2s,box-shadow .25s;
     min-width:0;position:relative;overflow:hidden;
+    height:96px;                      /* fixed height — never stretches */
   }
   .card::before{
     content:'';position:absolute;inset:0;border-radius:14px;
@@ -1438,10 +1452,11 @@ app.get("/", (req, res) => {
   .ws{background:rgba(30,58,42,0.8);color:#7ddd9f}
   .http{background:rgba(58,47,30,0.8);color:#ddd47f}
 
+  /* ── Empty state: spans full width, fixed modest height, never stretches ── */
   .empty{
     grid-column:1/-1;
     display:flex;align-items:center;justify-content:center;
-    min-height:360px;
+    height:96px;
     color:#6a6a7a;font-size:14px;text-align:center;
     background:rgba(28,28,34,0.35);
     border:1px dashed rgba(90,90,105,0.5);
@@ -1501,11 +1516,13 @@ app.get("/", (req, res) => {
     .stat .value{font-size:20px}
 
     .grid{
-      grid-template-columns:1fr;gap:10px;min-height:220px;
+      grid-template-columns:1fr;gap:10px;
+      grid-auto-rows:88px;
+      max-height:400px;
     }
-    .empty{min-height:220px;font-size:13px}
-    .card{padding:12px;gap:10px}
-    .av{width:48px;height:48px}
+    .empty{height:88px;font-size:13px}
+    .card{padding:12px;gap:10px;height:88px}
+    .av{width:52px;height:52px}
     .name{font-size:13px}
     .game{font-size:11px}
 
