@@ -21,6 +21,10 @@ const PRODUCT_PRICE_USD = 0.87;
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
 const REQUIRED_CONFIRMATIONS = 3;
 
+// MUST match the "Callback URL" in your Blockonomics store settings
+// character-for-character. No trailing slash, no extra query params.
+const STORE_CALLBACK = "https://serverssszz.onrender.com/webhook/blockonomics";
+
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
 
 // ─── STATS ───
@@ -107,16 +111,13 @@ function saveState() {
   } catch (e) { console.error("[state] save error:", e.message); }
 }
 
-function availableStock() {
-  return stock.filter(i => !i.soldTo);
-}
-
+function availableStock() { return stock.filter(i => !i.soldTo); }
 function findStockByKey(key) {
   for (const item of stock) if (item.key === key) return item;
   return null;
 }
 
-// ─── MEMPOOL.SPACE (Bitcoin blockchain API) ───
+// ─── MEMPOOL.SPACE ───
 function fetchText(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "ScriptHub/1.0" } }, (resp) => {
@@ -136,7 +137,6 @@ async function getAddressTxs(address) {
   const now = Date.now();
   const c = mempoolTxCache.get(address);
   if (c && now - c.at < MEMPOOL_TTL) return c.data;
-
   const raw = await fetchText(`https://mempool.space/api/address/${encodeURIComponent(address)}/txs`);
   let data;
   try { data = JSON.parse(raw); } catch (e) { throw new Error("mempool.space bad json: " + raw.slice(0, 200)); }
@@ -163,34 +163,17 @@ async function checkOrderPayment(order) {
     order.status = "expired";
     return { status: "expired", confirmations: 0 };
   }
-
   let txs;
-  try {
-    txs = await getAddressTxs(order.address);
-  } catch (e) {
-    console.error("[mempool] address txs error:", e.message);
-    return { status: "pending", confirmations: 0 };
-  }
-
-  if (!Array.isArray(txs) || txs.length === 0) {
-    return { status: "pending", confirmations: 0 };
-  }
-
+  try { txs = await getAddressTxs(order.address); }
+  catch (e) { return { status: "pending", confirmations: 0 }; }
+  if (!Array.isArray(txs) || txs.length === 0) return { status: "pending", confirmations: 0 };
   const tx = txs[0];
   order.txid = tx.txid;
-
-  if (!tx.status || !tx.status.confirmed) {
-    return { status: "mempool", confirmations: 0, txid: tx.txid };
-  }
-
+  if (!tx.status || !tx.status.confirmed) return { status: "mempool", confirmations: 0, txid: tx.txid };
   let tip;
-  try { tip = await getTipHeight(); }
-  catch (e) {
-    tip = tipCache.height || tx.status.block_height;
-  }
+  try { tip = await getTipHeight(); } catch (e) { tip = tipCache.height || tx.status.block_height; }
   const confirmations = Math.max(0, tip - tx.status.block_height + 1);
   order.confirmations = confirmations;
-
   if (confirmations >= REQUIRED_CONFIRMATIONS) {
     if (order.status !== "paid") {
       order.status = "paid";
@@ -199,24 +182,18 @@ async function checkOrderPayment(order) {
     }
     return { status: "paid", confirmations, txid: tx.txid, keys: order.assignedKeys };
   }
-
   return { status: "confirming", confirmations, txid: tx.txid };
 }
 
 function assignKeysToOrder(order) {
   if (order.assignedKeys && order.assignedKeys.length > 0) return order.assignedKeys;
-
   const picked = [];
   for (const item of stock) {
     if (picked.length >= order.qty) break;
     if (item.soldTo) continue;
     picked.push(item);
   }
-
-  if (picked.length < order.qty) {
-    console.error(`[order] ${order.id} wants ${order.qty} but only ${picked.length} in stock`);
-  }
-
+  if (picked.length < order.qty) console.error(`[order] ${order.id} wants ${order.qty} but only ${picked.length} in stock`);
   const keys = [];
   for (const item of picked) {
     item.soldTo = order.id;
@@ -224,7 +201,6 @@ function assignKeysToOrder(order) {
     keys.push(item.key);
   }
   saveState();
-
   order.assignedKeys = keys;
   console.log(`[order] ${order.id} PAID — issued ${keys.length} keys`);
   return keys;
@@ -329,33 +305,16 @@ function blockonomicsGet(pathname) {
   });
 }
 
-async function ensureStore() {
-  try {
-    const stores = await blockonomicsGet("/api/v2/stores");
-    if (Array.isArray(stores) && stores.length > 0) { console.log(`[blockonomics] store exists`); return true; }
-  } catch (e) {}
-  try {
-    await blockonomicsPost("/api/v2/stores", { name: "Script Hub", http_callback: "https://serverssszz.onrender.com/webhook/blockonomics" });
-    return true;
-  } catch (e) { console.error("[blockonomics] store create failed:", e.message); return false; }
-}
-
+// NOTE: No store auto-creation. The store must exist and be configured
+// in the Blockonomics dashboard — otherwise /api/new_address fails.
 async function createBitcoinAddress(orderId) {
-  let data = await blockonomicsPost("/api/new_address", {
-    match_callback: "https://serverssszz.onrender.com/webhook/blockonomics?order=" + orderId,
+  const data = await blockonomicsPost("/api/new_address", {
+    match_callback: STORE_CALLBACK,
   });
   if (!data || !data.address) {
-    const code = data && data.error_code;
-    const msg = data && data.error && data.error.message;
-    if (code === 1040 || (msg && msg.toLowerCase().includes("no store"))) {
-      if (await ensureStore()) {
-        data = await blockonomicsPost("/api/new_address", {
-          match_callback: "https://serverssszz.onrender.com/webhook/blockonomics?order=" + orderId,
-        });
-        if (data && data.address) return data.address;
-      }
-    }
-    throw new Error("Blockonomics: " + JSON.stringify(data));
+    const err = new Error("Blockonomics: " + JSON.stringify(data));
+    err.data = data;
+    throw err;
   }
   return data.address;
 }
@@ -519,7 +478,7 @@ ${extraJs}
 </script></body></html>`;
 }
 
-// ─── TOP NAV (Discord + Steam icons + Store/NFA/Redeem tabs) ───
+// ─── TOP NAV ───
 function topNav(active) {
   const cls = (name) => active === name ? "active" : "";
   return `
@@ -658,7 +617,7 @@ app.post("/checkout", async (req, res) => {
     console.log(`[order] created ${orderId} — ${qty} × $${PRODUCT_PRICE_USD} = $${totalUsd} → ${address}`);
     res.json({ ok: true, orderId });
   } catch (e) {
-    console.error("[checkout] error:", e.message);
+    console.error("[checkout] error:", e.message, e.data || "");
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -1265,5 +1224,5 @@ app.use((req, res) => {
 server.listen(PORT = process.env.PORT || 3000, async () => {
   console.log("Relay on " + PORT);
   loadState();
-  if (BLOCKONOMICS_API_KEY) await ensureStore();
+  console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
 });
