@@ -605,6 +605,21 @@ function shToggleSaved(slug) {
 }
 `;
 
+// ─── AD SLOT HELPER ───
+function promoSlot(label = "Sponsored", slotId = "0000000000") {
+  return `
+    <div class="promo-slot">
+      <div class="promo-tag">${label}</div>
+      <ins class="adsbygoogle"
+           style="display:block;width:100%;min-height:90px"
+           data-ad-client="${ADSENSE_CLIENT}"
+           data-ad-slot="${slotId}"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+    </div>
+  `;
+}
+
 // ─── PAGE SHELL ───
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "standard") {
   const isWide = layout === "wide";
@@ -705,6 +720,9 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "stand
   .help{display:flex;align-items:center;gap:12px;background:rgba(88,101,242,0.08);border:1px solid rgba(88,101,242,0.3);border-radius:12px;padding:14px 18px;color:#cfd5ff;font-size:13px;margin-top:16px;text-decoration:none;transition:background .15s,border-color .15s,transform .15s}
   .help:hover{background:rgba(88,101,242,0.15);border-color:rgba(88,101,242,0.55);transform:translateY(-1px)}
   .help-icon{width:20px;height:20px;flex-shrink:0}
+  .promo-slot{width:100%;max-width:970px;margin:24px auto 0;padding:14px;background:rgba(28,28,34,0.4);border:1px solid rgba(70,70,82,0.5);border-radius:14px;text-align:center;min-height:120px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);overflow:hidden;contain:layout}
+  .promo-tag{font-size:10px;color:#5a5a6a;text-transform:uppercase;letter-spacing:1.2px;font-weight:600;margin-bottom:8px}
+  .promo-slot .adsbygoogle{display:block !important;width:100%;min-height:90px;background:transparent}
   .result{margin-top:20px;padding:20px;background:rgba(30,58,42,0.3);border:1px solid rgba(125,221,159,0.4);border-radius:12px;display:none}
   .result.error{background:rgba(60,30,30,0.3);border-color:rgba(255,122,122,0.4)}
   .result-title{font-size:14px;font-weight:700;color:#7ddd9f;margin-bottom:12px}
@@ -1067,7 +1085,12 @@ app.get("/scripts", (req, res) => {
       <p class="sub">Every script we've verified. Click one to see the loader and copy it into your executor.</p>
     </div>
     ${empty || `<div class="scripts-grid">${cards}</div>`}
-  `, SCRIPTS_LIST_CSS, "", "wide");
+    ${promoSlot("Sponsored", "1135972285")}
+  `, SCRIPTS_LIST_CSS, `
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+  `, "wide");
   res.set("Content-Type", "text/html").send(html);
 });
 
@@ -1230,6 +1253,9 @@ app.get("/script/:slug", (req, res) => {
   })));
 
   const detailJs = `
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
     (function(){
       const SLUG = ${JSON.stringify(s.slug)};
       const AUTHOR = ${JSON.stringify(s.author)};
@@ -1697,6 +1723,8 @@ app.get("/script/:slug", (req, res) => {
         </div>
       </div>
     </div>
+
+    ${promoSlot("Sponsored", "1135972285")}
   `, detailCss, detailJs, "wide");
 
   res.set("Content-Type", "text/html").send(html);
