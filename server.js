@@ -20,12 +20,12 @@ const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY;
 const PRODUCT_PRICE_USD = 0.87;
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
 
-// Confirmations required per coin.
-// BTC: ~10 min/conf, 3 confs = ~30 min
-// USDT: ~12 sec/conf on Ethereum, 6 confs = ~1.5 min
-const CONFIRMATIONS = { BTC: 3, USDT: 6 };
+// Required confirmations per coin.
+// Blockonomics callbacks fire at status 2 for both BTC and USDT.
+const REQUIRED_CONFIRMATIONS = 2;
 
 const STORE_CALLBACK = "https://serverssszz.onrender.com/webhook/blockonomics";
+const CALLBACK_SECRET = process.env.BLOCKONOMICS_CALLBACK_SECRET || "script-hub-callback-secret";
 
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
 
@@ -47,7 +47,6 @@ process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(
 
 // ─── STOCK & STATE ───
 const STATE_FILE = process.env.STATE_FILE || path.join(__dirname, "state.json");
-
 let stock = [];
 let state = { issued: {}, redeemed: {} };
 
@@ -56,20 +55,16 @@ function normalizeStock(raw) {
   const out = [];
   for (const item of raw) {
     if (typeof item === "string") out.push({ key: null, credential: item, soldTo: null });
-    else if (item && typeof item.credential === "string") {
-      out.push({ key: item.key || null, credential: item.credential, soldTo: null });
-    }
+    else if (item && typeof item.credential === "string") out.push({ key: item.key || null, credential: item.credential, soldTo: null });
   }
   return out;
 }
-
 function randomKey() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let out = "PREMIER";
   for (let i = 0; i < 24; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
-
 function loadState() {
   if (process.env.STOCK_JSON) {
     try {
@@ -87,24 +82,17 @@ function loadState() {
       }
     } catch (e) { console.error("[stock] load error:", e.message); }
   }
-
   for (const item of stock) if (!item.key) item.key = randomKey();
-
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       if (raw.issued) state.issued = raw.issued;
       if (raw.redeemed) state.redeemed = raw.redeemed;
-      if (Array.isArray(raw.soldTo)) {
-        for (const item of stock) {
-          if (raw.soldTo[item.key]) item.soldTo = raw.soldTo[item.key];
-        }
-      }
+      if (Array.isArray(raw.soldTo)) for (const item of stock) if (raw.soldTo[item.key]) item.soldTo = raw.soldTo[item.key];
       console.log(`[state] loaded — issued: ${Object.keys(state.issued).length}, redeemed: ${Object.keys(state.redeemed).length}`);
     }
   } catch (e) { console.error("[state] load error:", e.message); }
 }
-
 function saveState() {
   try {
     const soldTo = {};
@@ -112,61 +100,10 @@ function saveState() {
     fs.writeFileSync(STATE_FILE, JSON.stringify({ issued: state.issued, redeemed: state.redeemed, soldTo }, null, 2));
   } catch (e) { console.error("[state] save error:", e.message); }
 }
-
 function availableStock() { return stock.filter(i => !i.soldTo); }
-function findStockByKey(key) {
-  for (const item of stock) if (item.key === key) return item;
-  return null;
-}
+function findStockByKey(key) { for (const item of stock) if (item.key === key) return item; return null; }
 
-// ─── BLOCKCHAIN HELPERS ───
-function fetchText(url) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { "User-Agent": "ScriptHub/1.0" } }, (resp) => {
-      let raw = "";
-      resp.on("data", (c) => { raw += c; });
-      resp.on("end", () => resolve(raw));
-    });
-    req.on("error", reject);
-    req.setTimeout(8000, () => req.destroy(new Error("timeout")));
-  });
-}
-
-// Bitcoin via mempool.space (no key needed, real-time mempool state)
-const mempoolTxCache = new Map();
-const MEMPOOL_TTL = 3000;
-
-async function getBtcAddressTxs(address) {
-  const now = Date.now();
-  const c = mempoolTxCache.get(address);
-  if (c && now - c.at < MEMPOOL_TTL) return c.data;
-  const raw = await fetchText(`https://mempool.space/api/address/${encodeURIComponent(address)}/txs`);
-  let data;
-  try { data = JSON.parse(raw); } catch (e) { throw new Error("mempool.space bad json"); }
-  mempoolTxCache.set(address, { data, at: now });
-  return data;
-}
-
-let tipCache = { height: 0, at: 0 };
-async function getBtcTipHeight() {
-  const now = Date.now();
-  if (now - tipCache.at < 10000) return tipCache.height;
-  const raw = await fetchText("https://mempool.space/api/blocks/tip/height");
-  const h = parseInt(raw.trim(), 10);
-  if (!h || isNaN(h)) throw new Error("bad tip height");
-  tipCache = { height: h, at: now };
-  return h;
-}
-
-// For USDT (and any other crypto Blockonomics supports), we use
-// Blockonomics' own address API — it tracks confirmation state for
-// every payment address it has issued regardless of chain.
-async function getBlockonomicsAddressInfo(address) {
-  const data = await blockonomicsGet("/api/address?addr=" + encodeURIComponent(address));
-  return data;
-}
-
-// ─── Roblox thumbnail proxy ───
+// ─── ROBLOX THUMBNAILS ───
 const thumbCache = new Map();
 const THUMB_TTL = 60 * 60 * 1000;
 const THUMB_NEG_TTL = 60 * 1000;
@@ -226,7 +163,20 @@ function findLuaFile(name) {
 // ─── ORDERS ───
 const orders = new Map();
 
-// ─── BLOCKONOMICS ───
+// ─── HELPERS ───
+function fetchText(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { "User-Agent": "ScriptHub/1.0" } }, (resp) => {
+      let raw = "";
+      resp.on("data", (c) => { raw += c; });
+      resp.on("end", () => resolve(raw));
+    });
+    req.on("error", reject);
+    req.setTimeout(8000, () => req.destroy(new Error("timeout")));
+  });
+}
+
+// ─── BLOCKONOMICS API ───
 function blockonomicsPost(pathname, body) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
@@ -265,13 +215,10 @@ function blockonomicsGet(pathname) {
   });
 }
 
-// Create a payment address for the given coin (BTC or USDT).
-// Blockonomics returns an address tied to the correct store wallet.
+// Per Blockonomics docs, `crypto` must be a QUERY STRING parameter, not in the body.
 async function createPaymentAddress(coin) {
-  const body = { match_callback: STORE_CALLBACK };
-  // Blockonomics accepts a "crypto" hint — BTC is default; for USDT we pass it explicitly
-  if (coin === "USDT") body.crypto = "USDT";
-  const data = await blockonomicsPost("/api/new_address", body);
+  const qs = "?match_callback=" + encodeURIComponent(STORE_CALLBACK) + "&crypto=" + encodeURIComponent(coin);
+  const data = await blockonomicsPost("/api/new_address" + qs, {});
   if (!data || !data.address) {
     const err = new Error("Blockonomics: " + JSON.stringify(data));
     err.data = data;
@@ -281,30 +228,30 @@ async function createPaymentAddress(coin) {
   return data.address;
 }
 
-async function getBtcPriceUsd() {
+async function getCryptoPriceUsd(coin) {
   try {
-    const raw = await fetchText("https://mempool.space/api/v1/prices");
+    const raw = await fetchText(`https://www.blockonomics.co/api/price?crypto=${encodeURIComponent(coin)}&currency=USD`);
     const data = JSON.parse(raw);
-    if (data && data.USD) return data.USD;
+    if (Array.isArray(data) && data[0] && data[0].price) return Number(data[0].price);
+    if (data && data.price) return Number(data.price);
   } catch (e) {}
-  const data = await blockonomicsGet("/api/price?currency=USD");
-  if (Array.isArray(data) && data[0] && data[0].price) return data[0].price;
-  if (data && data.price) return data.price;
-  throw new Error("Price fetch failed");
+  if (coin === "BTC") {
+    try {
+      const raw = await fetchText("https://mempool.space/api/v1/prices");
+      const data = JSON.parse(raw);
+      if (data && data.USD) return data.USD;
+    } catch (e) {}
+  }
+  if (coin === "USDT") return 1;
+  throw new Error("Price fetch failed for " + coin);
 }
 
-// USDT is a stablecoin — its USD price is approximately 1.0.
-// We use the exact USD amount as the USDT amount.
-function getUsdtAmountUsd(usd) {
-  return usd.toFixed(2);
-}
-
-// ─── PAYMENT CHECKING ───
+// ─── PAYMENT CHECK ───
+// BTC is polled via mempool.space (fast, free).
+// USDT requires the Web3 component to submit a txhash which we save on the order.
 async function checkOrderPayment(order) {
-  const required = CONFIRMATIONS[order.coin] || 3;
-
   if (order.status === "paid") {
-    return { status: "paid", confirmations: order.confirmations || required, txid: order.txid, keys: order.assignedKeys };
+    return { status: "paid", confirmations: order.confirmations || REQUIRED_CONFIRMATIONS, txid: order.txid, keys: order.assignedKeys };
   }
   if (Date.now() > order.expiresAt && order.status !== "paid") {
     order.status = "expired";
@@ -312,56 +259,45 @@ async function checkOrderPayment(order) {
   }
 
   if (order.coin === "BTC") {
-    let txs;
-    try { txs = await getBtcAddressTxs(order.address); }
-    catch (e) { return { status: "pending", confirmations: 0 }; }
-    if (!Array.isArray(txs) || txs.length === 0) return { status: "pending", confirmations: 0 };
-
-    const tx = txs[0];
-    order.txid = tx.txid;
-    if (!tx.status || !tx.status.confirmed) return { status: "mempool", confirmations: 0, txid: tx.txid };
-
-    let tip;
-    try { tip = await getBtcTipHeight(); } catch (e) { tip = tipCache.height || tx.status.block_height; }
-    const confirmations = Math.max(0, tip - tx.status.block_height + 1);
-    order.confirmations = confirmations;
-
-    if (confirmations >= required) {
-      if (order.status !== "paid") {
-        order.status = "paid";
-        order.paidAt = Date.now();
-        assignKeysToOrder(order);
+    try {
+      const raw = await fetchText(`https://mempool.space/api/address/${encodeURIComponent(order.address)}/txs`);
+      const txs = JSON.parse(raw);
+      if (!Array.isArray(txs) || txs.length === 0) return { status: "pending", confirmations: 0 };
+      const tx = txs[0];
+      order.txid = tx.txid;
+      if (!tx.status || !tx.status.confirmed) return { status: "mempool", confirmations: 0, txid: tx.txid };
+      let tip = tx.status.block_height;
+      try {
+        const rawTip = await fetchText("https://mempool.space/api/blocks/tip/height");
+        tip = parseInt(rawTip.trim(), 10) || tip;
+      } catch (e) {}
+      const confirmations = Math.max(0, tip - tx.status.block_height + 1);
+      order.confirmations = confirmations;
+      if (confirmations >= REQUIRED_CONFIRMATIONS) {
+        if (order.status !== "paid") { order.status = "paid"; order.paidAt = Date.now(); assignKeysToOrder(order); }
+        return { status: "paid", confirmations, txid: tx.txid, keys: order.assignedKeys };
       }
-      return { status: "paid", confirmations, txid: tx.txid, keys: order.assignedKeys };
-    }
-    return { status: "confirming", confirmations, txid: tx.txid };
+      return { status: "confirming", confirmations, txid: tx.txid };
+    } catch (e) { return { status: "pending", confirmations: 0 }; }
   }
 
-  // USDT — use Blockonomics address API
+  // USDT — waits for the Web3 component to submit a txhash first
+  if (!order.txid) {
+    return { status: "waiting-wallet", confirmations: 0 };
+  }
   try {
-    const info = await getBlockonomicsAddressInfo(order.address);
-    const txCount = (info && info.tx) || 0;
-    if (txCount === 0) return { status: "pending", confirmations: 0 };
-
-    // Blockonomics returns confirmed/unconfirmed balance and confirmations for the address
+    const info = await blockonomicsGet("/api/address?addr=" + encodeURIComponent(order.address));
     const confs = Number(info.confirmations || info.confirmation_count || 0);
-    const txid = info.tx_list && info.tx_list[0] && info.tx_list[0].txid;
-    order.txid = txid || order.txid;
     order.confirmations = confs;
-
-    if (confs >= required) {
-      if (order.status !== "paid") {
-        order.status = "paid";
-        order.paidAt = Date.now();
-        assignKeysToOrder(order);
-      }
+    if (confs >= REQUIRED_CONFIRMATIONS) {
+      if (order.status !== "paid") { order.status = "paid"; order.paidAt = Date.now(); assignKeysToOrder(order); }
       return { status: "paid", confirmations: confs, txid: order.txid, keys: order.assignedKeys };
     }
-    if (confs === 0) return { status: "mempool", confirmations: 0, txid: order.txid };
+    if (confs === 0 && info.tx > 0) return { status: "mempool", confirmations: 0, txid: order.txid };
+    if (confs === 0) return { status: "waiting-wallet", confirmations: 0, txid: order.txid };
     return { status: "confirming", confirmations: confs, txid: order.txid };
   } catch (e) {
-    console.error("[check-payment USDT] error:", e.message);
-    return { status: "pending", confirmations: 0 };
+    return { status: "waiting-wallet", confirmations: 0, txid: order.txid };
   }
 }
 
@@ -413,9 +349,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   a{color:#b9a3ff}
   .topnav{display:flex;align-items:center;gap:14px;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid rgba(70,70,82,0.4)}
   .topnav-icons{display:flex;gap:10px}
-  .topnav-icons a{display:inline-flex;align-items:center;justify-content:center;
-    width:42px;height:42px;border-radius:12px;text-decoration:none;
-    transition:transform .15s ease,background .2s,border-color .2s,box-shadow .2s}
+  .topnav-icons a{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;text-decoration:none;transition:transform .15s ease,background .2s,border-color .2s,box-shadow .2s}
   .topnav-icons a:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.4)}
   .topnav-icons a.discord{background:rgba(88,101,242,0.12);border:1px solid rgba(88,101,242,0.35)}
   .topnav-icons a.discord:hover{background:rgba(88,101,242,0.25);border-color:rgba(88,101,242,0.7)}
@@ -423,70 +357,43 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   .topnav-icons a.steam:hover{background:rgba(27,40,56,0.8);border-color:rgba(103,150,200,0.7)}
   .topnav-icons img{width:28px;height:28px;display:block;border-radius:6px;object-fit:contain}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto}
-  .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;
-    font-size:13px;font-weight:600;transition:background .15s,color .15s}
+  .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
   .topnav-tabs a.active{background:rgba(255,255,255,0.08);color:#fff}
   @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%}.topnav-tabs a{flex:1;text-align:center}}
-  .tag{display:inline-block;padding:4px 10px;border-radius:6px;
-    background:rgba(200,60,60,0.15);color:#ff7a7a;font-size:11px;font-weight:700;
-    letter-spacing:0.6px;margin-bottom:14px}
+  .tag{display:inline-block;padding:4px 10px;border-radius:6px;background:rgba(200,60,60,0.15);color:#ff7a7a;font-size:11px;font-weight:700;letter-spacing:0.6px;margin-bottom:14px}
   .h1{font-size:26px;font-weight:700;margin:0 0 8px;color:#fff}
   .sub{color:#8a8a9a;font-size:13px;line-height:1.55;margin:0 0 24px;max-width:600px}
-  .card{background:rgba(28,28,34,0.75);backdrop-filter:blur(14px);
-    border:1px solid rgba(70,70,82,0.6);border-radius:14px;padding:22px}
-  .label{font-size:11px;color:#8a8a9a;text-transform:uppercase;
-    letter-spacing:1.2px;font-weight:700;margin-bottom:10px}
-  .input{width:100%;padding:14px 16px;background:rgba(18,18,24,0.8);
-    border:1px solid rgba(200,60,60,0.6);border-radius:10px;color:#fff;
-    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
-    outline:none;transition:border-color .15s}
+  .card{background:rgba(28,28,34,0.75);backdrop-filter:blur(14px);border:1px solid rgba(70,70,82,0.6);border-radius:14px;padding:22px}
+  .label{font-size:11px;color:#8a8a9a;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:10px}
+  .input{width:100%;padding:14px 16px;background:rgba(18,18,24,0.8);border:1px solid rgba(200,60,60,0.6);border-radius:10px;color:#fff;font-family:ui-monospace,monospace;font-size:13px;outline:none;transition:border-color .15s}
   .input:focus{border-color:#e03a3a;box-shadow:0 0 0 3px rgba(224,58,58,0.15)}
-  .btn{width:100%;padding:14px;background:#e03a3a;color:#fff;font-weight:600;
-    font-size:15px;border:none;border-radius:10px;cursor:pointer;
-    box-shadow:0 8px 24px rgba(224,58,58,0.4);transition:filter .15s,transform .15s;
-    font-family:inherit}
+  .btn{width:100%;padding:14px;background:#e03a3a;color:#fff;font-weight:600;font-size:15px;border:none;border-radius:10px;cursor:pointer;box-shadow:0 8px 24px rgba(224,58,58,0.4);transition:filter .15s,transform .15s;font-family:inherit}
   .btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
   .btn:active{transform:translateY(0)}
   .btn:disabled{opacity:0.6;cursor:not-allowed;transform:none;filter:none}
-  .info{background:rgba(28,28,34,0.6);border:1px solid rgba(70,70,82,0.5);
-    border-radius:12px;padding:16px;color:#a8a8b8;font-size:13px;line-height:1.6;margin-top:16px}
+  .info{background:rgba(28,28,34,0.6);border:1px solid rgba(70,70,82,0.5);border-radius:12px;padding:16px;color:#a8a8b8;font-size:13px;line-height:1.6;margin-top:16px}
   .info b{color:#fff}
-  .help{display:flex;align-items:center;gap:12px;background:rgba(88,101,242,0.08);
-    border:1px solid rgba(88,101,242,0.3);border-radius:12px;padding:14px 18px;
-    color:#cfd5ff;font-size:13px;margin-top:16px;text-decoration:none;
-    transition:background .15s,border-color .15s}
+  .help{display:flex;align-items:center;gap:12px;background:rgba(88,101,242,0.08);border:1px solid rgba(88,101,242,0.3);border-radius:12px;padding:14px 18px;color:#cfd5ff;font-size:13px;margin-top:16px;text-decoration:none;transition:background .15s,border-color .15s}
   .help:hover{background:rgba(88,101,242,0.15);border-color:rgba(88,101,242,0.5)}
   .help-icon{width:20px;height:20px;flex-shrink:0}
-  .result{margin-top:20px;padding:20px;background:rgba(30,58,42,0.3);
-    border:1px solid rgba(125,221,159,0.4);border-radius:12px;display:none}
+  .result{margin-top:20px;padding:20px;background:rgba(30,58,42,0.3);border:1px solid rgba(125,221,159,0.4);border-radius:12px;display:none}
   .result.error{background:rgba(60,30,30,0.3);border-color:rgba(255,122,122,0.4)}
   .result-title{font-size:14px;font-weight:700;color:#7ddd9f;margin-bottom:12px}
   .result.error .result-title{color:#ff7a7a}
-  .cred{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
-    background:rgba(18,18,24,0.9);border:1px solid rgba(70,70,82,0.6);
-    border-radius:8px;padding:14px;color:#b9a3ff;word-break:break-all;
-    line-height:1.5;user-select:all}
-  .copy-btn{margin-top:12px;padding:10px 20px;background:rgba(120,90,255,0.2);
-    border:1px solid rgba(120,90,255,0.5);border-radius:8px;color:#b9a3ff;
-    font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
-    transition:background .15s}
+  .cred{font-family:ui-monospace,monospace;font-size:12px;background:rgba(18,18,24,0.9);border:1px solid rgba(70,70,82,0.6);border-radius:8px;padding:14px;color:#b9a3ff;word-break:break-all;line-height:1.5;user-select:all}
+  .copy-btn{margin-top:12px;padding:10px 20px;background:rgba(120,90,255,0.2);border:1px solid rgba(120,90,255,0.5);border-radius:8px;color:#b9a3ff;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
   .copy-btn:hover{background:rgba(120,90,255,0.3)}
   .conf-tracker{display:flex;justify-content:center;gap:8px;margin:20px 0}
-  .conf-dot{width:14px;height:14px;border-radius:50%;background:rgba(70,70,82,0.5);
-    border:2px solid rgba(70,70,82,0.7);transition:all .4s ease}
+  .conf-dot{width:14px;height:14px;border-radius:50%;background:rgba(70,70,82,0.5);border:2px solid rgba(70,70,82,0.7);transition:all .4s ease}
   .conf-dot.filled{background:#7ddd9f;border-color:#7ddd9f;box-shadow:0 0 12px rgba(125,221,159,0.6)}
   .conf-status{text-align:center;font-size:14px;color:#a8a8b8;margin-top:8px}
   .conf-count{text-align:center;font-size:15px;font-weight:700;color:#fff;margin-top:4px}
-  /* Coin selector */
   .coin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-  .coin{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;
-    background:rgba(18,18,24,0.6);border:2px solid rgba(70,70,82,0.5);cursor:pointer;
-    transition:border-color .15s,background .15s,transform .15s;user-select:none}
+  .coin{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:rgba(18,18,24,0.6);border:2px solid rgba(70,70,82,0.5);cursor:pointer;transition:border-color .15s,background .15s,transform .15s;user-select:none}
   .coin:hover{background:rgba(28,28,34,0.8);transform:translateY(-1px)}
   .coin.selected{border-color:#e03a3a;background:rgba(224,58,58,0.1)}
-  .coin-icon{width:32px;height:32px;border-radius:50%;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+  .coin-icon{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
   .coin-icon.btc{background:linear-gradient(135deg,#f7931a,#ffb84d)}
   .coin-icon.usdt{background:linear-gradient(135deg,#26a17b,#4fcf9b)}
   .coin-meta{flex:1;min-width:0}
@@ -641,14 +548,14 @@ app.get("/cart", (req, res) => {
           <div class="coin-icon btc">₿</div>
           <div class="coin-meta">
             <div class="coin-name">Bitcoin</div>
-            <div class="coin-desc">BTC · 3 confirmations</div>
+            <div class="coin-desc">BTC · 2 confirmations</div>
           </div>
         </div>
         <div class="coin" id="coinUSDT" onclick="selectCoin('USDT')">
           <div class="coin-icon usdt">₮</div>
           <div class="coin-meta">
             <div class="coin-name">USDT</div>
-            <div class="coin-desc">Tether · Ethereum · 6 confs</div>
+            <div class="coin-desc">Tether · Ethereum</div>
           </div>
         </div>
       </div>
@@ -711,14 +618,8 @@ app.post("/checkout", async (req, res) => {
     const orderId = "ord_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
     const address = await createPaymentAddress(coin);
-
-    let cryptoAmount;
-    if (coin === "BTC") {
-      const btcPrice = await getBtcPriceUsd();
-      cryptoAmount = (totalUsd / btcPrice).toFixed(8);
-    } else {
-      cryptoAmount = getUsdtAmountUsd(totalUsd);
-    }
+    const price = await getCryptoPriceUsd(coin);
+    const cryptoAmount = coin === "BTC" ? (totalUsd / price).toFixed(8) : (totalUsd / price).toFixed(2);
 
     const order = {
       id: orderId, qty, coin, totalUsd, cryptoAmount,
@@ -751,20 +652,36 @@ app.get("/pay/:orderId", (req, res) => {
     `));
   }
 
-  const required = CONFIRMATIONS[order.coin] || 3;
+  const required = REQUIRED_CONFIRMATIONS;
   const coinName = order.coin === "BTC" ? "Bitcoin" : "USDT";
   const coinSymbol = order.coin === "BTC" ? "BTC" : "USDT";
   const isBTC = order.coin === "BTC";
+  const isUSDT = order.coin === "USDT";
 
-  // Payment URI: bitcoin: prefix works for BTC. For USDT we just show address.
   const qrData = isBTC
     ? `bitcoin:${order.address}?amount=${order.cryptoAmount}`
     : `${order.address}`;
   const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(qrData);
 
-  // Build confirmation dots dynamically based on coin
   let dotsHtml = '';
   for (let i = 0; i < required; i++) dotsHtml += `<div class="conf-dot" data-i="${i+1}"></div>`;
+
+  const usdtWalletNotice = isUSDT ? `
+        <div style="margin-top:20px;padding:16px;background:rgba(38,161,123,0.1);
+                    border:1px solid rgba(38,161,123,0.35);border-radius:12px;
+                    color:#a8d9c8;font-size:13px;line-height:1.6">
+          <b style="color:#4fcf9b;display:block;margin-bottom:6px">USDT requires a browser wallet</b>
+          USDT on Ethereum is an ERC-20 token — it can't be sent from a normal exchange withdrawal to this address.
+          Open this page in a browser with the <b>Chui Wallet</b> extension installed, or a WalletConnect-compatible wallet,
+          then use the button below.
+          <button onclick="connectWallet()" style="margin-top:14px;width:100%;padding:12px;
+                  background:linear-gradient(135deg,#26a17b,#4fcf9b);color:#fff;
+                  font-weight:600;font-size:14px;border:none;border-radius:8px;cursor:pointer;font-family:inherit">
+            Connect Wallet &amp; Pay ${order.cryptoAmount} USDT
+          </button>
+          <div id="walletStatus" style="margin-top:10px;font-size:12px;color:#8a8a9a"></div>
+        </div>
+  ` : '';
 
   const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol}`, `
     ${topNav('nfa')}
@@ -780,7 +697,7 @@ app.get("/pay/:orderId", (req, res) => {
                       background:rgba(224,58,58,0.15);border:1px solid rgba(224,58,58,0.4);
                       font-size:11px;font-weight:700;color:#ff9a9a;text-transform:uppercase;
                       letter-spacing:1px;margin-bottom:12px">
-            ${order.coin === "BTC" ? "₿" : "₮"} ${coinName}
+            ${isBTC ? "₿" : "₮"} ${coinName}
           </div>
           <div class="label" style="margin-bottom:6px">Send exactly</div>
           <div style="font-size:26px;font-weight:700;color:#fff">${order.cryptoAmount} <span style="color:#8a8a9a;font-size:16px">${coinSymbol}</span></div>
@@ -808,6 +725,7 @@ app.get("/pay/:orderId", (req, res) => {
           <div class="conf-status" id="confStatus">Waiting for payment...</div>
           <div class="conf-count" id="confCount"></div>
         </div>
+        ${usdtWalletNotice}
       </div>
 
       <div class="card" id="keysCard" style="display:none;padding:28px;border-color:rgba(125,221,159,0.5);margin-top:20px">
@@ -831,10 +749,16 @@ app.get("/pay/:orderId", (req, res) => {
     <div id="modal" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,0.75);
                 backdrop-filter:blur(6px);align-items:center;justify-content:center">
       <div style="max-width:420px;width:calc(100% - 40px);background:rgba(28,28,34,0.95);
-                  border:1px solid rgba(70,70,82,0.7);border-radius:16px;padding:28px;text-align:center">
-        <div style="font-size:40px;margin-bottom:12px">⏰</div>
-        <div style="font-size:17px;font-weight:600;color:#fff;margin-bottom:12px">Transaction Cancelled</div>
-        <div style="color:#a8a8b8;font-size:14px;line-height:1.55;margin-bottom:20px">
+                  border:1px solid rgba(70,70,82,0.7);border-radius:16px;padding:32px 28px;text-align:center">
+        <div style="display:flex;justify-content:center;margin-bottom:20px">
+          <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" fill="none" stroke="#e8564a" stroke-width="3" stroke-linecap="round">
+            <circle cx="36" cy="36" r="30"/>
+            <line x1="26" y1="26" x2="46" y2="46"/>
+            <line x1="46" y1="26" x2="26" y2="46"/>
+          </svg>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:10px">Payment failed</div>
+        <div style="color:#a8a8b8;font-size:14px;line-height:1.55;margin-bottom:24px">
           Transaction canceled because nothing was sent within the 15 minutes time,
           Please contact the owner if you actually sent the ${coinName}.
         </div>
@@ -847,6 +771,7 @@ app.get("/pay/:orderId", (req, res) => {
       const ORDER_ID = ${JSON.stringify(order.id)};
       const EXPIRES_AT = ${order.expiresAt};
       const REQUIRED = ${required};
+      const IS_USDT = ${isUSDT ? "true" : "false"};
       let cancelled = false, paid = false, lastConf = -1;
 
       function fmt(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
@@ -901,6 +826,19 @@ app.get("/pay/:orderId", (req, res) => {
         setTimeout(() => el.textContent = old, 1200);
       };
 
+      // USDT requires the Web3 component. This is a placeholder that
+      // tells the user what they need. When Blockonomics' Chui Wallet
+      // script is wired in, replace this with the real invoke.
+      window.connectWallet = function(){
+        const el = document.getElementById('walletStatus');
+        el.textContent = 'Opening wallet...';
+        el.style.color = '#e8c07a';
+        setTimeout(() => {
+          el.textContent = 'USDT wallet integration requires the Blockonomics Web3 component on this page. See docs: developers.blockonomics.co/docs/guides/web3-usdt-component';
+          el.style.color = '#ff7a7a';
+        }, 800);
+      };
+
       async function poll(){
         if(cancelled || paid) return;
         try{
@@ -929,6 +867,10 @@ app.get("/pay/:orderId", (req, res) => {
           } else if (data.status === 'confirming'){
             document.getElementById('confStatus').textContent = 'Confirming on the blockchain...';
             paintConfirmations(data.confirmations || 0);
+          } else if (data.status === 'waiting-wallet'){
+            document.getElementById('confStatus').textContent = IS_USDT
+              ? 'Waiting for you to connect a wallet and send USDT...'
+              : 'Waiting for payment...';
           } else {
             document.getElementById('confStatus').textContent = 'Waiting for payment...';
           }
@@ -976,7 +918,26 @@ app.post("/cancel/:orderId", (req, res) => {
 
 // ─── /webhook/blockonomics ───
 app.get("/webhook/blockonomics", (req, res) => {
-  console.log(`[webhook] blockonomics order=${req.query.order} status=${req.query.status} addr=${req.query.addr || ""}`);
+  const orderId = req.query.order;
+  const addr = req.query.addr;
+  const status = parseInt(req.query.status, 10);
+  const txid = req.query.txid;
+
+  console.log(`[webhook] addr=${addr} status=${status} txid=${txid}`);
+
+  if (addr) {
+    for (const [id, order] of orders) {
+      if (order.address === addr) {
+        if (!isNaN(status) && status >= REQUIRED_CONFIRMATIONS && order.status !== "paid") {
+          order.status = "paid";
+          order.txid = txid || order.txid;
+          order.paidAt = Date.now();
+          assignKeysToOrder(order);
+        }
+        break;
+      }
+    }
+  }
   res.json({ ok: true });
 });
 
@@ -1088,7 +1049,7 @@ app.post("/redeem", (req, res) => {
   res.json({ ok: true, credential: item.credential });
 });
 
-// ─── RELAY ENDPOINTS ───
+// ─── ROBLOX RELAY (WebSocket) ───
 function userListPayload() {
   const users = [];
   for (const [ws, info] of wsClients) if (info.userId) users.push({ ...info, transport: "ws" });
@@ -1166,6 +1127,7 @@ app.post("/send", (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── EXECUTION COUNTER ───
 app.post("/execution", (req, res) => { const count = bumpExecutions(); res.json({ ok: true, count }); });
 app.get("/stats", (req, res) => res.json({ executions: stats.executions }));
 app.post("/stats/reset", (req, res) => { stats.executions = 0; saveStats(); res.json({ ok: true, count: 0 }); });
@@ -1181,6 +1143,7 @@ setInterval(() => {
   for (const [uid, entry] of httpClients) if (now - entry.info.ts > STALE_MS) { httpClients.delete(uid); broadcast({ type: "userLeft", userId: uid }, null); }
 }, 2000);
 
+// ─── LUA FILE SERVING ───
 function serveLua(name) {
   return (req, res) => {
     const filePath = findLuaFile(name);
@@ -1212,7 +1175,7 @@ app.get("/clients", async (req, res) => {
   res.json({ users: users.map(u => ({ ...u, thumbnail: thumbs[u.userId] || null })), executions: stats.executions });
 });
 
-// ─── Main dashboard ───
+// ─── MAIN DASHBOARD ───
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
@@ -1345,8 +1308,9 @@ app.use((req, res) => {
   `));
 });
 
-// ─── Boot ───
-server.listen(PORT = process.env.PORT || 3000, async () => {
+// ─── BOOT ───
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, async () => {
   console.log("Relay on " + PORT);
   loadState();
   console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
