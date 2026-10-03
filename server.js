@@ -87,7 +87,7 @@ const SCRIPTS = [
     name: "Infinite Yield",
     game: "Universal",
     subtitle: "Universal Admin Commands & Utilities",
-    description: "Infinite Yield is one of the most widely used admin command scripts for Roblox. It ships with a full command bar, ESP, fly, teleport, waypoints, chat tools, exploits, and hundreds of utility commands. Works across almost every game out of the box and needs no key.",
+    description: "Infinite Yield is one of the most widely used admin command scripts for Roblox. It ships with a full command bar, ESP, fly, teleport, waypoints, chat tools, and hundreds of utility commands. Works across almost every game out of the box and needs no key.",
     author: "Edge",
     authorTag: "#1",
     tags: ["Keyless", "Mobile friendly", "Universal"],
@@ -556,7 +556,6 @@ const CURSOR_SCRIPT = `
 `;
 
 // ─── SHARED CLIENT COOKIE HELPERS ───
-// Injected into every page so we can use cookies consistently for session state.
 const COOKIE_HELPERS = `
 function shSetCookie(name, value, days) {
   try {
@@ -607,7 +606,54 @@ function shToggleSaved(slug) {
 `;
 
 // ─── PAGE SHELL ───
-function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
+function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "standard") {
+  const isWide = layout === "wide";
+  const adBlockLeft = `
+    <div class="ad-sidebar left">
+      <ins class="adsbygoogle" style="display:block" data-ad-client="${ADSENSE_CLIENT}" data-ad-slot="1135972285" data-ad-format="auto" data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  `;
+  const adBlockRight = `
+    <div class="ad-sidebar right">
+      <ins class="adsbygoogle" style="display:block" data-ad-client="${ADSENSE_CLIENT}" data-ad-slot="1135972285" data-ad-format="auto" data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  `;
+  const wideCss = `
+    .wide-content {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .ad-sidebar {
+      width: 160px;
+      flex-shrink: 0;
+      display: none;
+      position: sticky;
+      top: 24px;
+      min-height: 600px;
+    }
+    .ad-sidebar ins {
+      display: block;
+      width: 100%;
+      min-height: 600px;
+    }
+    .main-content {
+      flex: 1;
+      min-width: 0;
+      max-width: 880px;
+    }
+    @media (min-width: 1024px) {
+      .ad-sidebar {
+        display: block;
+      }
+    }
+  `;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${title}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -637,6 +683,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
   .topnav-icons a.steam:hover{background:rgba(27,40,56,0.85);border-color:rgba(103,150,200,0.8);box-shadow:0 10px 24px rgba(103,150,200,0.3)}
   .topnav-icons img{width:28px;height:28px;display:block;border-radius:6px;object-fit:contain}
+  .topnav-icons .discord img{width:34px;height:34px;border-radius:8px}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto}
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s;position:relative}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
@@ -681,13 +728,18 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   .coin-name{font-size:14px;font-weight:700;color:#fff}
   .coin-desc{font-size:11px;color:#8a8a9a;margin-top:2px}
   @media (max-width:520px){.coin-grid{grid-template-columns:1fr}}
+  ${wideCss}
   ${extraCss}
 </style></head>
 <body>
   <canvas id="bg"></canvas>
   <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
   <div class="scanline"></div><div class="vignette"></div>
-  <div class="content">${bodyHtml}</div>
+  <div class="${isWide ? 'content wide-content' : 'content'}">
+    ${isWide ? adBlockLeft : ''}
+    <div class="${isWide ? 'main-content' : ''}">${bodyHtml}</div>
+    ${isWide ? adBlockRight : ''}
+  </div>
 <script>
 ${CURSOR_SCRIPT}
 ${COOKIE_HELPERS}
@@ -728,7 +780,7 @@ function topNav(active) {
   const cls = (name) => active === name ? "active" : "";
   return `<div class="topnav">
     <div class="topnav-icons">
-      <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer" title="Discord"><img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';"></a>
+      <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer" title="Discord"><img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord" style="width:34px;height:34px;border-radius:8px;" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';"></a>
       <a class="steam" href="/nfa" title="Steam"><img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';"></a>
     </div>
     <div class="topnav-tabs">
@@ -758,7 +810,6 @@ app.get("/api/script/:slug/stats", (req, res) => {
   res.json({ ok: true, views: st.views, likes: st.likes, dislikes: st.dislikes });
 });
 
-// NEW: per-device vote state so likes persist on reload
 app.get("/api/script/:slug/vote-state", (req, res) => {
   const s = findScript(req.params.slug);
   if (!s) return res.status(404).json({ ok: false });
@@ -917,7 +968,6 @@ app.post("/api/user/:username/follow", (req, res) => {
   res.json({ ok: true, followers: tUser.followers.length, isFollowing });
 });
 
-// NEW: check follow state for a specific viewer
 app.get("/api/user/:username/follow-state", (req, res) => {
   const target = String(req.params.username || "").trim();
   const tCheck = validateUsernameInput(target);
@@ -1017,7 +1067,7 @@ app.get("/scripts", (req, res) => {
       <p class="sub">Every script we've verified. Click one to see the loader and copy it into your executor.</p>
     </div>
     ${empty || `<div class="scripts-grid">${cards}</div>`}
-  `, SCRIPTS_LIST_CSS);
+  `, SCRIPTS_LIST_CSS, "", "wide");
   res.set("Content-Type", "text/html").send(html);
 });
 
@@ -1204,15 +1254,16 @@ app.get("/script/:slug", (req, res) => {
         panels.forEach(p => p.classList.toggle('active', p.dataset.panel === t));
       }));
 
-      // ── View counter (once per session) ──
-      (function(){
+      // ── View counter ──
+      (async function trackView() {
         try {
-          const key = 'hub_viewed_' + SLUG;
-          if (!sessionStorage.getItem(key)) {
-            sessionStorage.setItem(key, '1');
-            fetch('/api/script/' + SLUG + '/view', { method: 'POST' }).catch(() => {});
+          const r = await fetch('/api/script/' + SLUG + '/view', { method: 'POST' });
+          const d = await r.json();
+          if (d.ok) {
+            const el = document.getElementById('statViews');
+            if (el) el.textContent = fmtCount(d.views);
           }
-        } catch (e) { fetch('/api/script/' + SLUG + '/view', { method: 'POST' }).catch(() => {}); }
+        } catch (e) {}
       })();
 
       // ── Copy script loader ──
@@ -1271,7 +1322,6 @@ app.get("/script/:slug", (req, res) => {
       if (upBtn) upBtn.addEventListener('click', () => vote('like'));
       if (downBtn) downBtn.addEventListener('click', () => vote('dislike'));
 
-      // FIX: fetch vote state on load so liked/disliked persists after refresh
       (async function loadVoteState() {
         try {
           const r = await fetch('/api/script/' + SLUG + '/vote-state?device=' + encodeURIComponent(DEVICE));
@@ -1305,7 +1355,6 @@ app.get("/script/:slug", (req, res) => {
               return;
             }
           } catch (e) { /* user cancelled or unsupported */ }
-          // fallback: copy link to clipboard
           copyToClipboard(SHARE_URL, () => {
             const orig = shareBtn.innerHTML;
             shareBtn.innerHTML = '${ICONS.check(15)} Copied';
@@ -1344,7 +1393,6 @@ app.get("/script/:slug", (req, res) => {
           } catch (e) { alert('Network error'); }
         });
       }
-      // FIX: fetch follow state on load so the button reflects real state
       (async function loadFollowState() {
         const uname = shGetUsername();
         if (!uname) return;
@@ -1372,7 +1420,6 @@ app.get("/script/:slug", (req, res) => {
       const emojiPanel = document.getElementById('emojiPanel');
       const composerAvatar = document.getElementById('composerAvatar');
 
-      // FIX: composer avatar always reflects current username
       function updateComposerAvatar() {
         const u = shGetUsername() || 'You';
         composerAvatar.textContent = u.substring(0,1).toUpperCase();
@@ -1650,7 +1697,7 @@ app.get("/script/:slug", (req, res) => {
         </div>
       </div>
     </div>
-  `, detailCss, detailJs);
+  `, detailCss, detailJs, "wide");
 
   res.set("Content-Type", "text/html").send(html);
 });
@@ -1746,7 +1793,6 @@ app.get("/user/:username", (req, res) => {
         btn.textContent = isFollowing ? 'Following' : 'Follow';
       }
 
-      // FIX: fetch the current follow state so the button is accurate on load
       (async function loadFollowState() {
         if (!viewer) return;
         try {
@@ -2271,6 +2317,7 @@ app.get("/", (req, res) => {
   .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
   .topnav-icons a.steam:hover{background:rgba(27,40,56,0.85);transform:translateY(-3px) scale(1.05);box-shadow:0 12px 26px rgba(103,150,200,0.35)}
   .topnav-icons img{width:28px;height:28px;border-radius:6px;object-fit:contain}
+  .topnav-icons .discord img{width:34px;height:34px;border-radius:8px}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,color .15s,transform .15s,border-color .15s}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff;transform:translateY(-1px)}
@@ -2352,7 +2399,7 @@ app.get("/", (req, res) => {
   <div class="content">
     <div class="topnav">
       <div class="topnav-icons">
-        <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer"><img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';"></a>
+        <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer"><img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord" style="width:34px;height:34px;border-radius:8px;" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';"></a>
         <a class="steam" href="/nfa" title="Steam"><img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';"></a>
       </div>
       <div class="topnav-tabs">
