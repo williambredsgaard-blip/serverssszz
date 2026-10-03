@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Controller — Delta Hub  (fixed Bang + Join, dual-sided Fire/Smoke)
+--  Controller — Delta Hub  (whitelist + fixed Bang/Join)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -26,6 +26,106 @@ local WebSocket  = WebSocket or (syn and syn.websocket) or nil
 local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
 assert(loadstring, "Delta required (loadstring missing).")
+
+-- ═══════════════════════════════════════════════════════════════
+--  WHITELIST — fetch /wh.txt and verify LP.Name is on it
+-- ═══════════════════════════════════════════════════════════════
+local WHITELIST_URL = RELAY_HTTP .. "/wh.txt"
+local KICK_MSG = "Please ask ice to whitelist your Roblox account first if you want to use this."
+
+local function fetchWhitelist()
+    local ok, body = pcall(function()
+        return game:HttpGet(WHITELIST_URL)
+    end)
+    if ok and type(body) == "string" and body ~= "" then
+        return body
+    end
+    return nil
+end
+
+local function isNameWhitelisted(body, name)
+    if not body or not name then return false end
+    local lower = name:lower()
+    for raw in body:gmatch("[^\r\n]+") do
+        local line = raw:gsub("^%s+", ""):gsub("%s+$", "")
+        if line ~= "" and line:sub(1,1) ~= "#" and line:sub(1,2) ~= "--" then
+            if line:lower() == lower then return true end
+        end
+    end
+    return false
+end
+
+local function blockAccess(reason)
+    -- Fullscreen blocker so they can't interact with the game while blocked
+    local parent = (gethui and select(2, pcall(gethui))) or LP:WaitForChild("PlayerGui")
+    if parent then
+        local screen = Instance.new("ScreenGui")
+        screen.Name = "DeltaWhitelistBlock"
+        screen.ResetOnSpawn = false
+        screen.IgnoreGuiInset = true
+        screen.DisplayOrder = 2147483647
+        screen.Parent = parent
+
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        bg.BackgroundTransparency = 0.15
+        bg.BorderSizePixel = 0
+        bg.ZIndex = 100
+        bg.Parent = screen
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, -80, 0, 60)
+        title.Position = UDim2.new(0, 40, 0.5, -100)
+        title.BackgroundTransparency = 1
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 34
+        title.TextColor3 = Color3.fromRGB(255, 90, 90)
+        title.Text = "Access Denied"
+        title.ZIndex = 101
+        title.Parent = bg
+
+        local msg = Instance.new("TextLabel")
+        msg.Size = UDim2.new(1, -80, 0, 120)
+        msg.Position = UDim2.new(0, 40, 0.5, -40)
+        msg.BackgroundTransparency = 1
+        msg.Font = Enum.Font.Gotham
+        msg.TextSize = 18
+        msg.TextColor3 = Color3.fromRGB(230, 230, 230)
+        msg.TextWrapped = true
+        msg.Text = KICK_MSG
+        msg.ZIndex = 101
+        msg.Parent = bg
+
+        local sub = Instance.new("TextLabel")
+        sub.Size = UDim2.new(1, -80, 0, 30)
+        sub.Position = UDim2.new(0, 40, 0.5, 90)
+        sub.BackgroundTransparency = 1
+        sub.Font = Enum.Font.Gotham
+        sub.TextSize = 13
+        sub.TextColor3 = Color3.fromRGB(150, 150, 165)
+        sub.Text = "Reason: " .. tostring(reason or "not whitelisted") .. "  |  You: " .. LP.Name
+        sub.ZIndex = 101
+        sub.Parent = bg
+    end
+
+    -- Try real kick / disconnect helpers (works on some executors)
+    pcall(function() LP:Kick(KICK_MSG) end)
+    pcall(function() if syn and syn.disconnect then syn.disconnect() end end)
+    pcall(function() if disconnect then disconnect() end end)
+end
+
+do
+    local body = fetchWhitelist()
+    if not body then
+        blockAccess("could not reach whitelist server")
+        return
+    end
+    if not isNameWhitelisted(body, LP.Name) then
+        blockAccess("username not in whitelist")
+        return
+    end
+end
 
 local T = {
     Bg=Color3.fromRGB(18,18,22), Panel=Color3.fromRGB(28,28,34), Panel2=Color3.fromRGB(33,33,40),
@@ -400,9 +500,6 @@ if char then
 end
 ]]
 
--- ═══════════════════════════════════════════════════════════════
---  BANG  —  plays anim + continuously follows the controller
--- ═══════════════════════════════════════════════════════════════
 local function SCRIPT_BANG(controllerId)
     return string.format([[
 local Players = game:GetService("Players")
@@ -615,8 +712,6 @@ local outTab     = makeTab("OUTPUT")
 local debugTab   = makeTab("DEBUG")
 
 -- ═══ JOIN HELPER ═══
--- Client-side joining requires TeleportToPlaceInstance(placeId, jobId, player)
--- with a REAL jobId. We fetch a fresh public jobId from Roblox's servers API.
 local function fetchPublicJobId(placeId)
     local ok, resp = pcall(function()
         return game:HttpGet("https://games.roblox.com/v1/games/"..placeId.."/servers/Public?limit=100&excludeFullGames=true")
@@ -648,13 +743,11 @@ local function tryJoinPlace(placeId, jobId)
     placeId = tonumber(placeId)
     if not placeId then return false, "invalid placeId" end
 
-    -- If no jobId was passed, fetch a fresh public one so TeleportToPlaceInstance works
     if not jobId or jobId == "" then
         jobId = fetchPublicJobId(placeId)
         log("[Join] fetched jobId: "..tostring(jobId))
     end
 
-    -- Method 1: TeleportToPlaceInstance — the actual working API on modern executors
     if jobId then
         local ok = pcall(function()
             Teleport:TeleportToPlaceInstance(placeId, jobId, LP)
@@ -663,14 +756,12 @@ local function tryJoinPlace(placeId, jobId)
         if ok then return true, "TeleportToPlaceInstance" end
     end
 
-    -- Method 2: Teleport (may work on some executors that hook it)
     local ok2 = pcall(function()
         Teleport:Teleport(placeId, LP)
     end)
     log("[Join] Teleport -> "..tostring(ok2))
     if ok2 then return true, "Teleport" end
 
-    -- Method 3: GuiSvc deeplink (launches Roblox client)
     local deeplink = jobId
         and ("roblox://experiences/start?placeId="..placeId.."&gameInstanceId="..jobId)
         or  ("roblox://placeId="..placeId)
@@ -680,7 +771,6 @@ local function tryJoinPlace(placeId, jobId)
         if ok3 and res ~= false then return true, "GuiSvc deeplink" end
     end
 
-    -- Method 4: request the deeplink
     if request then
         local ok4 = pcall(function() request({Url = deeplink, Method = "GET"}) end)
         log("[Join] request deeplink -> "..tostring(ok4))
@@ -959,7 +1049,6 @@ Button(refreshBar, "Refresh List", nil, function()
     end
 end)
 
--- Handlers
 local function handleExecute(msg)
     local fn, compileErr = loadstring(msg.script)
     if fn then
