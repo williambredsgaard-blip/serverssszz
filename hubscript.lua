@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.5.1  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
+--  Universal Hub v3.5.2  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -24,6 +24,23 @@ local WebSocket  = WebSocket or (syn and syn.websocket) or nil
 local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
 local gethui     = gethui or (syn and syn.protect_gui and function() end) or nil
+
+-- ─── URL fetcher with fallbacks ───
+-- Tries game:HttpGet first (fast, native), then request() if the executor
+-- blocks HttpGet to non-whitelisted domains.
+local function fetchUrl(url)
+    local ok, body = pcall(function() return game:HttpGet(url) end)
+    if ok and type(body) == "string" and body ~= "" then return body end
+    if request then
+        local ok2, resp = pcall(function()
+            return request({Url = url, Method = "GET"})
+        end)
+        if ok2 and resp and type(resp.Body) == "string" and resp.Body ~= "" then
+            return resp.Body
+        end
+    end
+    return nil
+end
 
 local T = {
     Bg=Color3.fromRGB(18,18,22), Panel=Color3.fromRGB(28,28,34), Panel2=Color3.fromRGB(33,33,40),
@@ -52,7 +69,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.1",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.2",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -128,7 +145,15 @@ local function makeTab(name)
             end
         end
     end
-    btn.MouseButton1Click:Connect(select)
+    local lastTabFire = 0
+    local function trySelect()
+        local now = tick()
+        if now - lastTabFire < 0.3 then return end
+        lastTabFire = now
+        select()
+    end
+    btn.Activated:Connect(trySelect)
+    btn.MouseButton1Click:Connect(trySelect)
     btn.MouseEnter:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.1}) end)
     btn.MouseLeave:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.3}) end)
     if #pages == 1 then select() end
@@ -172,18 +197,34 @@ local function Toggle(parent, name, default, cb)
     local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Parent=f})
     b.MouseEnter:Connect(function() tw(f, QI, {BackgroundTransparency=0.05,BackgroundColor3=T.Hover}) end)
     b.MouseLeave:Connect(function() tw(f, QI, {BackgroundTransparency=0.25,BackgroundColor3=T.Panel}) end)
-    b.MouseButton1Click:Connect(function() state = not state; render(); if cb then pcall(cb, state) end end)
+    local lastFire = 0
+    local function tryFire()
+        local now = tick()
+        if now - lastFire < 0.3 then return end
+        lastFire = now
+        state = not state; render(); if cb then pcall(cb, state) end
+    end
+    b.Activated:Connect(tryFire)
+    b.MouseButton1Click:Connect(tryFire)
 end
 local function Button(parent, name, cb)
-    local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,28),Parent=parent})
+    local f = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=0.25,Size=UDim2.new(1,0,0,28),Active=true,Parent=parent})
     corner(f,6); stroke(f, T.Stroke, 1, 0.5)
     C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,10,0,0),Size=UDim2.new(1,-20,1,0),Font=Enum.Font.Gotham,Text=name,TextColor3=T.Text,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,Parent=f})
-    local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Parent=f})
+    local b = C("TextButton",{BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),Text="",Active=true,AutoButtonColor=false,Parent=f})
     b.MouseEnter:Connect(function() tw(f, QI, {BackgroundTransparency=0.05,BackgroundColor3=T.Hover}) end)
     b.MouseLeave:Connect(function() tw(f, QI, {BackgroundTransparency=0.25,BackgroundColor3=T.Panel}) end)
     b.MouseButton1Down:Connect(function() tw(f, QI, {BackgroundTransparency=0,BackgroundColor3=T.Accent}) end)
     b.MouseButton1Up:Connect(function() tw(f, QI, {BackgroundTransparency=0.05,BackgroundColor3=T.Hover}) end)
-    b.MouseButton1Click:Connect(function() if cb then pcall(cb) end end)
+    local lastFire = 0
+    local function tryFire()
+        local now = tick()
+        if now - lastFire < 0.3 then return end
+        lastFire = now
+        if cb then pcall(cb) end
+    end
+    b.Activated:Connect(tryFire)        -- fires on both PC click and mobile tap
+    b.MouseButton1Click:Connect(tryFire) -- backup for executors that don't fire Activated
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -446,24 +487,37 @@ Section(gamesTab, "Game Scripts")
 
 local ddgLoading = false
 Button(gamesTab, "Duck Duck (TAG) Script", function()
+    print("[Games] DDG button clicked")
     if ddgLoading then
+        print("[Games] already loading, ignoring")
         notify("Games", "Already loading Duck Duck Goose...", T.Warning)
         return
     end
     ddgLoading = true
     notify("Games", "Loading Duck Duck Goose script...", T.Accent)
+
     task.spawn(function()
         local ok, err = pcall(function()
             local url = RELAY_HTTP .. "/ddg.lua"
-            local src = game:HttpGet(url)
+            print("[Games] fetching " .. url)
+            local src = fetchUrl(url)
             if not src or src == "" then
-                error("Empty response from " .. url)
+                error("Empty response from " .. url .. " (both HttpGet and request failed)")
             end
-            local fn = loadstring(src)
+            print("[Games] got " .. tostring(#src) .. " bytes")
+
+            local compiler = loadstring or load
+            if not compiler then
+                error("No loadstring/load function available in this executor")
+            end
+            print("[Games] compiling...")
+            local fn = compiler(src)
             if not fn then
-                error("loadstring returned nil (script too large or blocked)")
+                error("Compilation failed (loadstring returned nil)")
             end
+            print("[Games] executing DDG...")
             fn()
+            print("[Games] DDG finished executing")
         end)
         ddgLoading = false
         if ok then
@@ -581,7 +635,7 @@ Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.5.1\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
+    Text="Universal Hub v3.5.2\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
@@ -620,12 +674,10 @@ local function postExecution()
 end
 
 local function fetchExecutions()
-    local ok, resp = pcall(function()
-        return game:HttpGet(RELAY_HTTP .. "/stats")
-    end)
-    if not ok or not resp or resp == "" then return nil end
-    local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp)
-    if ok2 and data and data.executions then return data.executions end
+    local body = fetchUrl(RELAY_HTTP .. "/stats")
+    if not body or body == "" then return nil end
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if ok and data and data.executions then return data.executions end
     return nil
 end
 
@@ -672,10 +724,10 @@ if loadstring then
         return nil
     end
     local function httpGet(path)
-        local ok, resp = pcall(function() return game:HttpGet(RELAY_HTTP..path) end)
-        if ok and resp and resp ~= "" then
-            local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp)
-            if ok2 then return data end
+        local body = fetchUrl(RELAY_HTTP..path)
+        if body and body ~= "" then
+            local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+            if ok then return data end
         end
         return nil
     end
