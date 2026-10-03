@@ -369,10 +369,13 @@ const CURSOR_SCRIPT = `
 `;
 
 // ─── PAGE SHELL ───
+// NOTE: AdSense Auto Ads script is now injected into every page shell,
+// so it loads on /nfa, /cart, /pay/*, /redeem, 404, etc.
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${title}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}" crossorigin="anonymous"></script>
 <style>
   *{box-sizing:border-box}
   html{overflow-x:hidden}
@@ -1666,4 +1669,5 @@ server.listen(PORT, async () => {
   loadState();
   console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
   console.log(`[boot] ads.txt will serve: google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0`);
+  console.log(`[boot] Auto Ads client: ${ADSENSE_CLIENT}`);
 });
