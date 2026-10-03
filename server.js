@@ -226,12 +226,13 @@ function serveLua(name) {
 app.get("/hubscript.lua",  serveLua("hubscript.lua"));
 app.get("/controller.lua", serveLua("controller.lua"));
 app.get("/ddg.lua",        serveLua("ddg.lua"));
+app.get("/wh.txt",         serveLua("wh.txt"));
 
 app.get("/files", (req, res) => {
   const found = {};
   for (const dir of LUA_SEARCH_PATHS) {
     try {
-      const entries = fs.readdirSync(dir).filter(f => f.endsWith(".lua") || f.endsWith(".js"));
+      const entries = fs.readdirSync(dir).filter(f => f.endsWith(".lua") || f.endsWith(".js") || f.endsWith(".txt"));
       found[dir] = entries;
     } catch (e) {
       found[dir] = `error: ${e.message}`;
