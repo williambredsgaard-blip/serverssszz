@@ -26,6 +26,20 @@ const ADSENSE_PUB_ID = "pub-4246726390307705";
 
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
 
+// ─── COOKIE PARSER ───
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  const out = {};
+  header.split(";").forEach(part => {
+    const idx = part.indexOf("=");
+    if (idx < 0) return;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    try { out[k] = decodeURIComponent(v); } catch { out[k] = v; }
+  });
+  return out;
+}
+
 // ─── ICONS ───
 const S = 'style="display:inline-block;vertical-align:middle;flex-shrink:0"';
 const ICONS = {
@@ -39,6 +53,7 @@ const ICONS = {
   thumbUp: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M7 10v12"/><path d="M15 5.88L14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88z"/></svg>`,
   thumbDown: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M17 14V2"/><path d="M9 18.12L10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88z"/></svg>`,
   star: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  starFilled: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="currentColor" ${S}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
   share: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
   flag: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="currentColor" ${S}><path d="M5 2v20h2v-8h10l-2-3 2-3H7V2H5z"/></svg>`,
   arrowLeft: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
@@ -62,10 +77,8 @@ function tagIcon(tag) {
   return "";
 }
 
-// ─── AVATAR HELPERS (FIXED: always purple→blue gradient, never random) ───
-const AVATAR_BG = "linear-gradient(135deg,#7850ff,#2f8fff)";
-// Kept for backwards compat in case any code still calls it — always returns the same hex.
-function pickAvatarColor() { return "#7850ff"; }
+// ─── AVATAR HELPERS ───
+const AVATAR_GRADIENT = "linear-gradient(135deg,#7850ff,#2f8fff)";
 
 // ─── SCRIPTS REGISTRY ───
 const SCRIPTS = [
@@ -93,7 +106,7 @@ function fmtCount(n) {
   return String(n);
 }
 
-// ─── SOCIAL DATA (stats / users / comments) ───
+// ─── SOCIAL DATA ───
 const SOCIAL_FILE = path.join(__dirname, "social.json");
 let social = { scripts: {}, users: {}, comments: {} };
 try {
@@ -248,7 +261,7 @@ function validateUsernameInput(name) {
   return { ok: true, cleaned: trimmed };
 }
 
-// ─── STATS (hub executions, kept separate) ───
+// ─── STATS ───
 const STATS_FILE = path.join(__dirname, "stats.json");
 let stats = { executions: 0 };
 try { if (fs.existsSync(STATS_FILE)) stats = Object.assign(stats, JSON.parse(fs.readFileSync(STATS_FILE, "utf8"))); } catch (e) {}
@@ -542,6 +555,57 @@ const CURSOR_SCRIPT = `
 })();
 `;
 
+// ─── SHARED CLIENT COOKIE HELPERS ───
+// Injected into every page so we can use cookies consistently for session state.
+const COOKIE_HELPERS = `
+function shSetCookie(name, value, days) {
+  try {
+    const d = new Date();
+    d.setTime(d.getTime() + (days || 365) * 24 * 60 * 60 * 1000);
+    document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+  } catch (e) {}
+}
+function shGetCookie(name) {
+  try {
+    const key = name + '=';
+    const parts = document.cookie.split(';');
+    for (let p of parts) {
+      p = p.trim();
+      if (p.indexOf(key) === 0) {
+        try { return decodeURIComponent(p.slice(key.length)); } catch (err) { return p.slice(key.length); }
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+function shGetUsername() { return shGetCookie('hub_username') || ''; }
+function shSetUsername(u) { shSetCookie('hub_username', u, 365); }
+function shGetDeviceId() {
+  let d = shGetCookie('hub_device_id');
+  if (!d) {
+    d = 'dev_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    shSetCookie('hub_device_id', d, 365);
+  }
+  return d;
+}
+function shGetSavedScripts() {
+  try {
+    const raw = shGetCookie('hub_saved');
+    if (!raw) return [];
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+  } catch (e) { return []; }
+}
+function shSetSavedScripts(arr) { shSetCookie('hub_saved', arr.join(','), 365); }
+function shIsSaved(slug) { return shGetSavedScripts().indexOf(slug) >= 0; }
+function shToggleSaved(slug) {
+  const cur = shGetSavedScripts();
+  const i = cur.indexOf(slug);
+  if (i >= 0) cur.splice(i, 1); else cur.push(slug);
+  shSetSavedScripts(cur);
+  return i < 0;
+}
+`;
+
 // ─── PAGE SHELL ───
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   return `<!DOCTYPE html>
@@ -626,6 +690,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   <div class="content">${bodyHtml}</div>
 <script>
 ${CURSOR_SCRIPT}
+${COOKIE_HELPERS}
 (function(){
   const canvas = document.getElementById('bg');
   if (!canvas) return;
@@ -691,6 +756,22 @@ app.get("/api/script/:slug/stats", (req, res) => {
   if (!s) return res.status(404).json({ ok: false });
   const st = getScriptStats(s.slug);
   res.json({ ok: true, views: st.views, likes: st.likes, dislikes: st.dislikes });
+});
+
+// NEW: per-device vote state so likes persist on reload
+app.get("/api/script/:slug/vote-state", (req, res) => {
+  const s = findScript(req.params.slug);
+  if (!s) return res.status(404).json({ ok: false });
+  const device = String(req.query.device || "").slice(0, 80);
+  const st = getScriptStats(s.slug);
+  res.json({
+    ok: true,
+    views: st.views,
+    likes: st.likes,
+    dislikes: st.dislikes,
+    liked: device ? !!st.likedBy[device] : false,
+    disliked: device ? !!st.dislikedBy[device] : false
+  });
 });
 
 app.post("/api/script/:slug/view", (req, res) => {
@@ -836,6 +917,20 @@ app.post("/api/user/:username/follow", (req, res) => {
   res.json({ ok: true, followers: tUser.followers.length, isFollowing });
 });
 
+// NEW: check follow state for a specific viewer
+app.get("/api/user/:username/follow-state", (req, res) => {
+  const target = String(req.params.username || "").trim();
+  const tCheck = validateUsernameInput(target);
+  if (!tCheck.ok) return res.status(400).json({ ok: false, error: tCheck.reason });
+  const follower = String(req.query.follower || "").trim();
+  if (!follower) return res.json({ ok: true, isFollowing: false, followers: getUser(tCheck.cleaned).followers.length });
+  const fCheck = validateUsernameInput(follower);
+  if (!fCheck.ok) return res.json({ ok: true, isFollowing: false, followers: getUser(tCheck.cleaned).followers.length });
+  const tUser = getUser(tCheck.cleaned);
+  const isFollowing = tUser.followers.some(n => n.toLowerCase() === fCheck.cleaned.toLowerCase());
+  res.json({ ok: true, isFollowing, followers: tUser.followers.length });
+});
+
 app.get("/api/user/:username", (req, res) => {
   const name = String(req.params.username || "").trim();
   const u = social.users[name];
@@ -888,7 +983,6 @@ app.get("/scripts", (req, res) => {
   const cards = SCRIPTS.map(s => {
     const st = getScriptStats(s.slug);
     const primary = s.primaryTag || (s.tags && s.tags[0]) || "";
-    // FIX: author name is now a <span>, NOT a nested <a>, because the whole card is already an <a>.
     return `
     <a href="/script/${s.slug}" class="script-card">
       <div class="script-card-thumb">
@@ -941,6 +1035,10 @@ app.get("/script/:slug", (req, res) => {
     `));
   }
 
+  const cookies = parseCookies(req);
+  const viewer = cookies.hub_username || "";
+  const composerLetter = viewer ? viewer.substring(0,1).toUpperCase() : "Y";
+
   const st = getScriptStats(s.slug);
   const loader = loaderFor(s);
   const loaderEscaped = loader.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -966,7 +1064,6 @@ app.get("/script/:slug", (req, res) => {
     .script-detail-title{font-size:26px;font-weight:800;color:#fff;line-height:1.22;margin:0 0 8px;letter-spacing:-0.3px}
     .script-detail-sub{color:#8a8a9a;font-size:14px;margin-bottom:16px}
     .script-detail-author{display:flex;align-items:center;gap:11px;margin-bottom:18px;flex-wrap:wrap}
-    /* FIX: gradient moved into CSS so no inline random color is used anymore */
     .script-detail-author-icon{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#7850ff,#2f8fff);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;flex-shrink:0;text-decoration:none}
     .script-detail-author-text{min-width:0}
     .script-detail-author-name{font-weight:700;color:#fff;font-size:15px;display:flex;align-items:center;gap:6px;line-height:1.2;text-decoration:none}
@@ -996,8 +1093,8 @@ app.get("/script/:slug", (req, res) => {
     .script-detail-vote .divider{width:1px;background:rgba(70,70,82,0.7)}
     .script-detail-action{background:rgba(40,40,48,0.85);border:1px solid rgba(70,70,82,0.6);border-radius:10px;color:#b8b8c4;font-family:inherit;font-size:13.5px;font-weight:600;padding:0 16px;height:38px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .15s,color .15s,border-color .15s;text-decoration:none}
     .script-detail-action:hover{background:rgba(58,58,70,0.95);color:#fff}
-    .script-detail-action.report{color:#e8665a}
-    .script-detail-action.report:hover{color:#ff7a7a;border-color:rgba(255,120,120,0.4)}
+    .script-detail-action.saved{color:#f0c060;border-color:rgba(240,192,96,0.4)}
+    .script-detail-action.saved:hover{color:#ffd784}
 
     .script-tabs{display:flex;gap:6px;margin-top:32px;border-bottom:1px solid rgba(70,70,82,0.4)}
     .script-tab{background:transparent;border:none;font-family:inherit;font-size:14.5px;font-weight:600;color:#8a8a9a;padding:12px 4px;margin-right:22px;cursor:pointer;position:relative;transition:color .15s}
@@ -1014,10 +1111,7 @@ app.get("/script/:slug", (req, res) => {
     .script-loader-copy{position:absolute;top:10px;right:10px;background:rgba(74,124,240,0.18);border:1px solid rgba(74,124,240,0.5);color:#a8bff0;padding:6px 12px;border-radius:6px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:background .15s}
     .script-loader-copy:hover{background:rgba(74,124,240,0.35);color:#fff}
     .script-loader-hint{color:#6a6a7a;font-size:12px;margin-top:10px;line-height:1.6}
-    .script-detail-banner{margin-top:26px;padding:14px 18px;background:rgba(200,120,40,0.08);border:1px solid rgba(220,160,60,0.3);border-radius:10px;color:#e8c07a;font-size:12.5px;line-height:1.6}
-    .script-detail-banner b{color:#f0c060}
 
-    /* ─── Comment section ─── */
     .comment-section{margin-top:8px}
     .comment-composer{display:flex;gap:14px;padding:20px;background:rgba(18,18,24,0.65);border:1px solid rgba(60,60,72,0.5);border-radius:14px}
     .comment-composer-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0;overflow:hidden;border:1px solid rgba(120,90,255,0.3)}
@@ -1042,7 +1136,6 @@ app.get("/script/:slug", (req, res) => {
     .comment-empty{color:#6a6a7a;font-size:13.5px;text-align:center;padding:26px 0}
     .comment-item{display:flex;gap:14px;padding-bottom:22px;border-bottom:1px solid rgba(60,60,72,0.35)}
     .comment-item:last-child{border-bottom:none;padding-bottom:0}
-    /* FIX: gradient moved into CSS, no more random inline color */
     .comment-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;flex-shrink:0;text-decoration:none;transition:transform .15s}
     .comment-avatar:hover{transform:scale(1.05)}
     .comment-body{flex:1;min-width:0}
@@ -1060,7 +1153,6 @@ app.get("/script/:slug", (req, res) => {
     .comment-action svg{display:block}
     .comment-action-count{min-width:12px;text-align:left}
 
-    /* Comment username modal */
     .uname-modal{position:fixed;inset:0;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
     .uname-modal.open{display:flex}
     .uname-card{background:rgba(24,24,30,0.98);border:1px solid rgba(70,70,82,0.7);border-radius:14px;padding:26px;max-width:400px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.6)}
@@ -1092,8 +1184,8 @@ app.get("/script/:slug", (req, res) => {
       const SLUG = ${JSON.stringify(s.slug)};
       const AUTHOR = ${JSON.stringify(s.author)};
       const INITIAL_COMMENTS = ${initialCommentsJson};
+      const SHARE_URL = location.origin + '/script/' + SLUG;
 
-      // client-side number formatter to keep view/vote counts consistent with server fmtCount()
       function fmtCount(n) {
         n = Number(n) || 0;
         if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\\.0$/,"") + "M";
@@ -1101,17 +1193,7 @@ app.get("/script/:slug", (req, res) => {
         return String(n);
       }
 
-      function getDeviceId() {
-        try {
-          let d = localStorage.getItem('hub_device_id');
-          if (!d) { d = 'dev_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); localStorage.setItem('hub_device_id', d); }
-          return d;
-        } catch (e) { return 'dev_fallback_' + Math.random().toString(36).slice(2, 12); }
-      }
-      function getUsername() { try { return localStorage.getItem('hub_username') || ''; } catch (e) { return ''; } }
-      function setUsername(u) { try { localStorage.setItem('hub_username', u); } catch (e) {} }
-
-      const DEVICE = getDeviceId();
+      const DEVICE = shGetDeviceId();
 
       // ── Tabs ──
       const tabBtns = document.querySelectorAll('.script-tab');
@@ -1122,7 +1204,7 @@ app.get("/script/:slug", (req, res) => {
         panels.forEach(p => p.classList.toggle('active', p.dataset.panel === t));
       }));
 
-      // ── View counter (fire once per session per slug) ──
+      // ── View counter (once per session) ──
       (function(){
         try {
           const key = 'hub_viewed_' + SLUG;
@@ -1168,14 +1250,13 @@ app.get("/script/:slug", (req, res) => {
       const downBtn = document.getElementById('scriptDownBtn');
       const statLikes = document.getElementById('statLikes');
       const statDislikes = document.getElementById('statDislikes');
+      const thumbLikes = document.getElementById('thumbLikes');
       function setVoteState(state) {
-        upBtn.classList.toggle('active', state.liked);
-        downBtn.classList.toggle('active', state.disliked);
-        // FIX: use fmtCount consistently everywhere
-        statLikes.textContent = fmtCount(state.likes);
-        statDislikes.textContent = fmtCount(state.dislikes);
-        const bThumb = document.getElementById('thumbLikes');
-        if (bThumb) bThumb.textContent = fmtCount(state.likes);
+        if (upBtn) upBtn.classList.toggle('active', !!state.liked);
+        if (downBtn) downBtn.classList.toggle('active', !!state.disliked);
+        if (statLikes) statLikes.textContent = fmtCount(state.likes);
+        if (statDislikes) statDislikes.textContent = fmtCount(state.dislikes);
+        if (thumbLikes) thumbLikes.textContent = fmtCount(state.likes);
       }
       async function vote(v) {
         try {
@@ -1190,17 +1271,66 @@ app.get("/script/:slug", (req, res) => {
       if (upBtn) upBtn.addEventListener('click', () => vote('like'));
       if (downBtn) downBtn.addEventListener('click', () => vote('dislike'));
 
+      // FIX: fetch vote state on load so liked/disliked persists after refresh
+      (async function loadVoteState() {
+        try {
+          const r = await fetch('/api/script/' + SLUG + '/vote-state?device=' + encodeURIComponent(DEVICE));
+          const d = await r.json();
+          if (d && d.ok) setVoteState(d);
+        } catch (e) {}
+      })();
+
+      // ── Save button ──
+      const saveBtn = document.getElementById('saveBtn');
+      function paintSaveBtn() {
+        if (!saveBtn) return;
+        const isSaved = shIsSaved(SLUG);
+        saveBtn.classList.toggle('saved', isSaved);
+        saveBtn.innerHTML = (isSaved ? '${ICONS.starFilled(15)} Saved' : '${ICONS.star(15)} Save');
+      }
+      if (saveBtn) {
+        paintSaveBtn();
+        saveBtn.addEventListener('click', () => { shToggleSaved(SLUG); paintSaveBtn(); });
+      }
+
+      // ── Share button ──
+      const shareBtn = document.getElementById('shareBtn');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', async () => {
+          const title = ${JSON.stringify(s.name)};
+          const text = 'Check out ' + title + ' on Roblox Script Hub';
+          try {
+            if (navigator.share) {
+              await navigator.share({ title, text, url: SHARE_URL });
+              return;
+            }
+          } catch (e) { /* user cancelled or unsupported */ }
+          // fallback: copy link to clipboard
+          copyToClipboard(SHARE_URL, () => {
+            const orig = shareBtn.innerHTML;
+            shareBtn.innerHTML = '${ICONS.check(15)} Copied';
+            setTimeout(() => { shareBtn.innerHTML = orig; }, 1600);
+          });
+        });
+      }
+
       // ── Follow button ──
       const followBtn = document.getElementById('followBtn');
+      const followCountEl = document.getElementById('authorFollowerCount');
+      function paintFollowBtn(isFollowing) {
+        if (!followBtn) return;
+        followBtn.classList.toggle('following', !!isFollowing);
+        followBtn.innerHTML = (isFollowing ? 'Following' : '${ICONS.plus(14)} Follow');
+      }
       if (followBtn) {
         followBtn.addEventListener('click', async () => {
-          let uname = getUsername();
+          let uname = shGetUsername();
           if (!uname) {
             uname = prompt('Choose a username to follow as (3-20 chars, letters/digits/_- ):');
             if (!uname) return;
             const ok = await validateAndSaveUsername(uname);
             if (!ok) return;
-            uname = getUsername();
+            uname = shGetUsername();
           }
           try {
             const r = await fetch('/api/user/' + encodeURIComponent(AUTHOR) + '/follow', {
@@ -1209,19 +1339,28 @@ app.get("/script/:slug", (req, res) => {
             });
             const d = await r.json();
             if (!d.ok) { alert(d.error || 'Could not follow'); return; }
-            followBtn.classList.toggle('following', d.isFollowing);
-            followBtn.innerHTML = (d.isFollowing ? 'Following' : '${ICONS.plus(14)} Follow');
+            paintFollowBtn(d.isFollowing);
+            if (followCountEl) followCountEl.textContent = d.followers + ' follower' + (d.followers === 1 ? '' : 's');
           } catch (e) { alert('Network error'); }
         });
       }
+      // FIX: fetch follow state on load so the button reflects real state
+      (async function loadFollowState() {
+        const uname = shGetUsername();
+        if (!uname) return;
+        try {
+          const r = await fetch('/api/user/' + encodeURIComponent(AUTHOR) + '/follow-state?follower=' + encodeURIComponent(uname));
+          const d = await r.json();
+          if (d && d.ok) paintFollowBtn(d.isFollowing);
+        } catch (e) {}
+      })();
 
-      // ── Username validation ──
       async function validateAndSaveUsername(name) {
         name = (name || '').trim();
         if (name.length < 3) { alert('Username must be at least 3 characters'); return false; }
         if (name.length > 20) { alert('Username must be 20 characters or fewer'); return false; }
         if (!/^[a-zA-Zа-яА-ЯёЁ0-9_\\-]+$/.test(name)) { alert('Username may only contain letters, digits, _ and -'); return false; }
-        setUsername(name);
+        shSetUsername(name);
         return true;
       }
 
@@ -1233,9 +1372,9 @@ app.get("/script/:slug", (req, res) => {
       const emojiPanel = document.getElementById('emojiPanel');
       const composerAvatar = document.getElementById('composerAvatar');
 
-      // FIX: composer avatar now uses only the fixed gradient; just set the letter.
+      // FIX: composer avatar always reflects current username
       function updateComposerAvatar() {
-        const u = getUsername() || 'You';
+        const u = shGetUsername() || 'You';
         composerAvatar.textContent = u.substring(0,1).toUpperCase();
       }
       updateComposerAvatar();
@@ -1258,8 +1397,6 @@ app.get("/script/:slug", (req, res) => {
         const initial = c.username.substring(0,1).toUpperCase();
         const liked = c.likedBy && c.likedBy[DEVICE] ? ' active-like' : '';
         const disliked = c.dislikedBy && c.dislikedBy[DEVICE] ? ' active-dislike' : '';
-        // FIX: no inline background; CSS class owns the fixed gradient.
-        // FIX: removed the confusing "Reply → /user/..." link.
         return \`<div class="comment-item" data-id="\${escapeHtml(c.id)}">
           <a class="comment-avatar" href="/user/\${encodeURIComponent(c.username)}">\${escapeHtml(initial)}</a>
           <div class="comment-body">
@@ -1325,7 +1462,7 @@ app.get("/script/:slug", (req, res) => {
           const err = document.getElementById('unameError');
           const okBtn = document.getElementById('unameOk');
           const cancelBtn = document.getElementById('unameCancel');
-          input.value = getUsername() || '';
+          input.value = shGetUsername() || '';
           err.textContent = '';
           modal.classList.add('open');
           setTimeout(() => input.focus(), 30);
@@ -1341,7 +1478,7 @@ app.get("/script/:slug", (req, res) => {
             if (v.length < 3) { err.textContent = 'Username must be at least 3 characters'; return; }
             if (v.length > 20) { err.textContent = 'Username must be 20 characters or fewer'; return; }
             if (!/^[a-zA-Zа-яА-ЯёЁ0-9_\\-]+$/.test(v)) { err.textContent = 'Only letters, digits, _ and - are allowed'; return; }
-            setUsername(v);
+            shSetUsername(v);
             close(v);
           }
           function onCancel() { close(null); }
@@ -1355,7 +1492,7 @@ app.get("/script/:slug", (req, res) => {
       submitBtn.addEventListener('click', async () => {
         const text = textarea.value.trim();
         if (!text) return;
-        let uname = getUsername();
+        let uname = shGetUsername();
         if (!uname) {
           uname = await askUsername();
           if (!uname) return;
@@ -1409,7 +1546,6 @@ app.get("/script/:slug", (req, res) => {
         } catch (e) {}
       });
 
-      // Update relative times every 30s
       setInterval(() => {
         document.querySelectorAll('.comment-time[data-at]').forEach(el => {
           const at = parseInt(el.dataset.at, 10);
@@ -1441,7 +1577,7 @@ app.get("/script/:slug", (req, res) => {
           <a class="script-detail-author-icon" href="/user/${encodeURIComponent(s.author)}">${sanitizeText(s.author.substring(0,1).toUpperCase())}</a>
           <div class="script-detail-author-text">
             <a class="script-detail-author-name" href="/user/${encodeURIComponent(s.author)}">${sanitizeText(s.author)} ${s.authorTag ? `<span class="verified">${ICONS.verified(14)}</span>` : ''}</a>
-            <div class="script-detail-author-sub">${sanitizeText(s.posted)} · ${sanitizeText(s.game)} · ${authorUser.followers.length} follower${authorUser.followers.length === 1 ? '' : 's'}</div>
+            <div class="script-detail-author-sub">${sanitizeText(s.posted)} · ${sanitizeText(s.game)} · <span id="authorFollowerCount">${authorUser.followers.length} follower${authorUser.followers.length === 1 ? '' : 's'}</span></div>
           </div>
           <button class="script-detail-follow" id="followBtn">${ICONS.plus(14)} Follow</button>
         </div>
@@ -1459,9 +1595,8 @@ app.get("/script/:slug", (req, res) => {
             <div class="divider"></div>
             <button class="down" id="scriptDownBtn">${ICONS.thumbDown(15)} <span id="statDislikes">${fmtCount(st.dislikes)}</span></button>
           </div>
-          <button class="script-detail-action">${ICONS.star(15)} Save</button>
-          <button class="script-detail-action">${ICONS.share(15)} Share</button>
-          <button class="script-detail-action report">${ICONS.flag(15)} Report</button>
+          <button class="script-detail-action" id="saveBtn">${ICONS.star(15)} Save</button>
+          <button class="script-detail-action" id="shareBtn">${ICONS.share(15)} Share</button>
         </div>
       </div>
     </div>
@@ -1487,7 +1622,7 @@ app.get("/script/:slug", (req, res) => {
     <div class="script-panel" data-panel="comments">
       <div class="comment-section">
         <div class="comment-composer">
-          <div class="comment-composer-avatar" id="composerAvatar">Y</div>
+          <div class="comment-composer-avatar" id="composerAvatar">${sanitizeText(composerLetter)}</div>
           <div class="comment-composer-body">
             <textarea class="comment-textarea" id="commentText" placeholder="Add a comment..." maxlength="500"></textarea>
             <div class="comment-composer-actions">
@@ -1501,10 +1636,6 @@ app.get("/script/:slug", (req, res) => {
         </div>
         <div class="comment-list" id="commentList"></div>
       </div>
-    </div>
-
-    <div class="script-detail-banner">
-      <b>Heads-up:</b> Never share your Roblox password or cookies with anyone. Scripts are safe to paste into your executor, but only download them from sources you trust.
     </div>
 
     <div class="uname-modal" id="unameModal">
@@ -1564,7 +1695,6 @@ app.get("/user/:username", (req, res) => {
 
   const profileCss = `
     .profile-card{background:rgba(24,24,30,0.72);border:1px solid rgba(60,60,72,0.55);border-radius:16px;padding:26px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-bottom:26px}
-    /* FIX: gradient moved into CSS, no random inline color */
     .profile-avatar{width:82px;height:82px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:32px;flex-shrink:0;box-shadow:0 10px 24px rgba(0,0,0,0.35)}
     .profile-info{flex:1;min-width:220px}
     .profile-name{font-size:24px;font-weight:800;color:#fff;margin:0 0 4px;letter-spacing:-0.3px}
@@ -1603,23 +1733,37 @@ app.get("/user/:username", (req, res) => {
   const profileJs = `
     (function(){
       const NAME = ${JSON.stringify(name)};
-      function getUsername() { try { return localStorage.getItem('hub_username') || ''; } catch (e) { return ''; } }
-      function setUsername(u) { try { localStorage.setItem('hub_username', u); } catch (e) {} }
       const btn = document.getElementById('profileFollowBtn');
       if (!btn) return;
-      const viewer = getUsername();
+      const viewer = shGetUsername();
       if (viewer && viewer.toLowerCase() === NAME.toLowerCase()) {
         btn.style.display = 'none';
         return;
       }
+
+      function paint(isFollowing) {
+        btn.classList.toggle('following', !!isFollowing);
+        btn.textContent = isFollowing ? 'Following' : 'Follow';
+      }
+
+      // FIX: fetch the current follow state so the button is accurate on load
+      (async function loadFollowState() {
+        if (!viewer) return;
+        try {
+          const r = await fetch('/api/user/' + encodeURIComponent(NAME) + '/follow-state?follower=' + encodeURIComponent(viewer));
+          const d = await r.json();
+          if (d && d.ok) paint(d.isFollowing);
+        } catch (e) {}
+      })();
+
       btn.addEventListener('click', async () => {
-        let u = getUsername();
+        let u = shGetUsername();
         if (!u) {
           u = prompt('Choose a username to follow as (3-20 chars, letters/digits/_- ):');
           if (!u) return;
           u = u.trim();
           if (u.length < 3 || u.length > 20 || !/^[a-zA-Zа-яА-ЯёЁ0-9_\\-]+$/.test(u)) { alert('Invalid username'); return; }
-          setUsername(u);
+          shSetUsername(u);
         }
         try {
           const r = await fetch('/api/user/' + encodeURIComponent(NAME) + '/follow', {
@@ -1628,8 +1772,7 @@ app.get("/user/:username", (req, res) => {
           });
           const d = await r.json();
           if (!d.ok) { alert(d.error || 'Could not follow'); return; }
-          btn.classList.toggle('following', d.isFollowing);
-          btn.textContent = d.isFollowing ? 'Following' : 'Follow';
+          paint(d.isFollowing);
           document.getElementById('profileFollowers').textContent = d.followers;
         } catch (e) { alert('Network error'); }
       });
@@ -2263,6 +2406,7 @@ app.get("/", (req, res) => {
   </div>
 <script>
 ${CURSOR_SCRIPT}
+${COOKIE_HELPERS}
 const FB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="10" fill="#2a2a34"/><text x="28" y="37" font-family="sans-serif" font-size="24" font-weight="600" fill="#8a8a9a" text-anchor="middle">?</text></svg>');
 (function(){
   const c=document.getElementById('bg');if(!c)return;
