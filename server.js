@@ -313,55 +313,53 @@ function assignKeysToOrder(order) {
   return keys;
 }
 
-// ─── SHARED CURSOR FOLLOWER (injected into every page) ───
+// ─── SHARED CURSOR FOLLOWER (red spotlight, injected into every page) ───
 const CURSOR_SCRIPT = `
 (function(){
   if (!matchMedia('(pointer:fine)').matches) return;
   if (window.__shCursor) return;
   window.__shCursor = true;
 
-  // Soft radial glow that lerps behind the cursor
   const glow = document.createElement('div');
   glow.setAttribute('aria-hidden','true');
   glow.style.cssText = [
     'position:fixed',
     'top:0','left:0',
-    'width:520px','height:520px',
+    'width:420px','height:420px',
     'pointer-events:none',
     'z-index:0',
     'opacity:0',
     'border-radius:50%',
-    'background:radial-gradient(circle, rgba(140,105,255,0.14) 0%, rgba(140,105,255,0.06) 35%, rgba(120,90,255,0) 70%)',
-    'transform:translate3d(0,0,0) translate(-50%,-50%)',
+    'background:radial-gradient(circle, rgba(255,70,70,0.16) 0%, rgba(230,50,50,0.07) 35%, rgba(200,40,40,0) 70%)',
+    'transform:translate3d(0,0,0)',
     'transition:opacity .4s ease',
     'will-change:transform',
     'mix-blend-mode:screen'
   ].join(';');
   document.body.appendChild(glow);
 
-  // Smaller inner dot for that "dual-layer" look
   const dot = document.createElement('div');
   dot.setAttribute('aria-hidden','true');
   dot.style.cssText = [
     'position:fixed',
     'top:0','left:0',
-    'width:8px','height:8px',
+    'width:7px','height:7px',
     'pointer-events:none',
     'z-index:0',
     'opacity:0',
     'border-radius:50%',
-    'background:radial-gradient(circle, rgba(185,163,255,0.9) 0%, rgba(140,105,255,0.3) 60%, transparent 100%)',
-    'transform:translate3d(0,0,0) translate(-50%,-50%)',
+    'background:radial-gradient(circle, rgba(255,140,140,0.9) 0%, rgba(230,60,60,0.35) 60%, transparent 100%)',
+    'transform:translate3d(0,0,0)',
     'transition:opacity .4s ease, width .2s ease, height .2s ease',
     'will-change:transform',
     'mix-blend-mode:screen',
-    'box-shadow:0 0 12px rgba(140,105,255,0.6)'
+    'box-shadow:0 0 12px rgba(255,80,80,0.7)'
   ].join(';');
   document.body.appendChild(dot);
 
-  let mx = innerWidth/2, my = innerHeight/2;   // raw mouse
-  let gx = mx, gy = my;                        // glow lag
-  let dx = mx, dy = my;                        // dot lag
+  let mx = innerWidth/2, my = innerHeight/2;
+  let gx = mx, gy = my;
+  let dx = mx, dy = my;
   let visible = false;
 
   window.addEventListener('mousemove', e => {
@@ -379,14 +377,13 @@ const CURSOR_SCRIPT = `
     dot.style.opacity = '0';
   });
 
-  // Click pulse
   document.addEventListener('mousedown', () => {
-    dot.style.width = '22px';
-    dot.style.height = '22px';
+    dot.style.width = '20px';
+    dot.style.height = '20px';
   });
   document.addEventListener('mouseup', () => {
-    dot.style.width = '8px';
-    dot.style.height = '8px';
+    dot.style.width = '7px';
+    dot.style.height = '7px';
   });
 
   function loop() {
@@ -394,8 +391,8 @@ const CURSOR_SCRIPT = `
     gy += (my - gy) * 0.08;
     dx += (mx - dx) * 0.22;
     dy += (my - dy) * 0.22;
-    glow.style.transform = 'translate3d(' + (gx - 260) + 'px,' + (gy - 260) + 'px,0)';
-    dot.style.transform  = 'translate3d(' + (dx - 4)   + 'px,' + (dy - 4)   + 'px,0)';
+    glow.style.transform = 'translate3d(' + (gx - 210) + 'px,' + (gy - 210) + 'px,0)';
+    dot.style.transform  = 'translate3d(' + (dx - 3.5) + 'px,' + (dy - 3.5) + 'px,0)';
     requestAnimationFrame(loop);
   }
   loop();
@@ -539,14 +536,14 @@ function topNav(active) {
           <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
                onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
         </a>
-        <a class="steam" href="/nfa" title="NFA Shop">
+        <a class="steam" href="/nfa" title="Steam">
           <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam"
                onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';">
         </a>
       </div>
       <div class="topnav-tabs">
-        <a href="/" class="${cls('store')}">Store</a>
-        <a href="/nfa" class="${cls('nfa')}">NFA Loader</a>
+        <a href="/" class="${cls('store')}">Home</a>
+        <a href="/nfa" class="${cls('nfa')}">Steam</a>
         <a href="/redeem" class="${cls('redeem')}">Redeem</a>
       </div>
     </div>
@@ -561,7 +558,7 @@ app.get("/nfa", (req, res) => {
     : "background:rgba(90,40,40,0.6);border:1px solid rgba(220,90,90,0.4);color:#ff9a9a;";
   const stockText = available > 0 ? (available + " in stock") : "Out of stock";
 
-  const html = pageShell("NFA Loader — Script Hub", `
+  const html = pageShell("NFA Loader — Roblox Script Hub", `
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">NFA Loader</div>
@@ -607,7 +604,7 @@ app.get("/cart", (req, res) => {
   const available = availableStock().length;
   const hasStock = available >= qty;
 
-  const html = pageShell("Cart — Script Hub", `
+  const html = pageShell("Cart — Roblox Script Hub", `
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">Your Cart</div>
@@ -725,7 +722,7 @@ app.post("/checkout", async (req, res) => {
 app.get("/pay/:orderId", (req, res) => {
   const order = orders.get(req.params.orderId);
   if (!order) {
-    return res.status(404).send(pageShell("Order not found", `
+    return res.status(404).send(pageShell("Order not found — Roblox Script Hub", `
       ${topNav('nfa')}
       <div style="text-align:center;padding:60px 20px">
         <div class="h1">Order not found</div>
@@ -765,7 +762,7 @@ app.get("/pay/:orderId", (req, res) => {
     ? `<script src="https://blockonomics.co/js/web3-payment.js"></script>`
     : '';
 
-  const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol}`, `
+  const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol} — Roblox Script Hub`, `
     ${topNav('nfa')}
     <div style="max-width:560px;margin:0 auto;position:relative">
       <button id="cancelBtn" onclick="cancelOrder()" style="position:absolute;top:16px;left:16px;z-index:2;
@@ -1068,7 +1065,7 @@ app.get("/webhook/blockonomics", (req, res) => {
 
 // ─── /redeem ───
 app.get("/redeem", (req, res) => {
-  const html = pageShell("Redeem — Script Hub", `
+  const html = pageShell("Redeem — Roblox Script Hub", `
     ${topNav('redeem')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">Redeem &amp; Replacements</div>
@@ -1304,7 +1301,7 @@ app.get("/clients", async (req, res) => {
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Script Hub Dashboard</title>
+<html><head><meta charset="utf-8"><title>Roblox Script Hub Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4246726390307705" crossorigin="anonymous"></script>
 <style>
@@ -1510,21 +1507,21 @@ app.get("/", (req, res) => {
           <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
                onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
         </a>
-        <a class="steam" href="/nfa" title="NFA Shop">
+        <a class="steam" href="/nfa" title="Steam">
           <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam"
                onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';">
         </a>
       </div>
       <div class="topnav-tabs">
-        <a href="/" class="active">Store</a>
-        <a href="/nfa">NFA Loader</a>
+        <a href="/" class="active">Home</a>
+        <a href="/nfa">Steam</a>
         <a href="/redeem">Redeem</a>
       </div>
     </div>
 
     <div class="header">
       <div>
-        <h1>Script Hub Dashboard</h1>
+        <h1>Roblox Script Hub Dashboard</h1>
         <div class="sub">Live view of every client running the hub script</div>
       </div>
       <div class="stats">
@@ -1613,7 +1610,7 @@ setInterval(rf,2000);
 // ─── 404 ───
 app.use((req, res) => {
   const safePath = String(req.originalUrl || "/").replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-  res.status(404).set("Content-Type", "text/html").send(pageShell("Not Found — Script Hub", `
+  res.status(404).set("Content-Type", "text/html").send(pageShell("Not Found — Roblox Script Hub", `
     ${topNav('none')}
     <div style="max-width:520px;margin:0 auto;text-align:center;padding:36px 24px">
       <div style="display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;
