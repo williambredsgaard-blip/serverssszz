@@ -42,9 +42,7 @@ process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(
 // ─── STOCK & STATE ───
 const STATE_FILE = process.env.STATE_FILE || path.join(__dirname, "state.json");
 
-// stock: [{ key, credential, soldTo: null | orderId }]
 let stock = [];
-// state: { issued: { key: { orderId, at } }, redeemed: { key: { at, ip } } }
 let state = { issued: {}, redeemed: {} };
 
 function normalizeStock(raw) {
@@ -67,7 +65,6 @@ function randomKey() {
 }
 
 function loadState() {
-  // Load stock: env var wins (private + encrypted on Render)
   if (process.env.STOCK_JSON) {
     try {
       stock = normalizeStock(JSON.parse(process.env.STOCK_JSON));
@@ -85,17 +82,14 @@ function loadState() {
     } catch (e) { console.error("[stock] load error:", e.message); }
   }
 
-  // Generate keys for any item missing one
   for (const item of stock) if (!item.key) item.key = randomKey();
 
-  // Load persisted state (issued/redeemed + soldTo)
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       if (raw.issued) state.issued = raw.issued;
       if (raw.redeemed) state.redeemed = raw.redeemed;
       if (Array.isArray(raw.soldTo)) {
-        // soldTo: { key: orderId }
         for (const item of stock) {
           if (raw.soldTo[item.key]) item.soldTo = raw.soldTo[item.key];
         }
@@ -135,7 +129,7 @@ function fetchText(url) {
   });
 }
 
-const mempoolTxCache = new Map(); // address -> { data, at }
+const mempoolTxCache = new Map();
 const MEMPOOL_TTL = 3000;
 
 async function getAddressTxs(address) {
@@ -161,10 +155,9 @@ async function getTipHeight() {
   return h;
 }
 
-// Returns { status: 'pending'|'mempool'|'confirming'|'paid'|'expired', confirmations, txid }
 async function checkOrderPayment(order) {
   if (order.status === "paid") {
-    return { status: "paid", confirmations: order.confirmations || REQUIRED_CONFIRMATIONS, txid: order.txid };
+    return { status: "paid", confirmations: order.confirmations || REQUIRED_CONFIRMATIONS, txid: order.txid, keys: order.assignedKeys };
   }
   if (Date.now() > order.expiresAt && order.status !== "paid") {
     order.status = "expired";
@@ -183,7 +176,6 @@ async function checkOrderPayment(order) {
     return { status: "pending", confirmations: 0 };
   }
 
-  // mempool.space returns newest first
   const tx = txs[0];
   order.txid = tx.txid;
 
@@ -194,14 +186,12 @@ async function checkOrderPayment(order) {
   let tip;
   try { tip = await getTipHeight(); }
   catch (e) {
-    // Fall back to whatever we know
     tip = tipCache.height || tx.status.block_height;
   }
   const confirmations = Math.max(0, tip - tx.status.block_height + 1);
   order.confirmations = confirmations;
 
   if (confirmations >= REQUIRED_CONFIRMATIONS) {
-    // Trigger key assignment (only happens once)
     if (order.status !== "paid") {
       order.status = "paid";
       order.paidAt = Date.now();
@@ -300,7 +290,7 @@ function findLuaFile(name) {
 // ─── ORDERS ───
 const orders = new Map();
 
-// ─── BLOCKONOMICS (address generation only) ───
+// ─── BLOCKONOMICS ───
 function blockonomicsPost(pathname, body) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
@@ -371,13 +361,11 @@ async function createBitcoinAddress(orderId) {
 }
 
 async function getBtcPriceUsd() {
-  // Use mempool.space price too (no Blockonomics quota used)
   try {
     const raw = await fetchText("https://mempool.space/api/v1/prices");
     const data = JSON.parse(raw);
     if (data && data.USD) return data.USD;
   } catch (e) {}
-  // Fall back to Blockonomics
   const data = await blockonomicsGet("/api/price?currency=USD");
   if (Array.isArray(data) && data[0] && data[0].price) return data[0].price;
   if (data && data.price) return data.price;
@@ -418,6 +406,8 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   .topnav-icons a:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.4)}
   .topnav-icons a.discord{background:rgba(88,101,242,0.12);border:1px solid rgba(88,101,242,0.35)}
   .topnav-icons a.discord:hover{background:rgba(88,101,242,0.25);border-color:rgba(88,101,242,0.7)}
+  .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
+  .topnav-icons a.steam:hover{background:rgba(27,40,56,0.8);border-color:rgba(103,150,200,0.7)}
   .topnav-icons img{width:28px;height:28px;display:block;border-radius:6px;object-fit:contain}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto}
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;
@@ -529,7 +519,7 @@ ${extraJs}
 </script></body></html>`;
 }
 
-// ─── TOP NAV ───
+// ─── TOP NAV (Discord + Steam icons + Store/NFA/Redeem tabs) ───
 function topNav(active) {
   const cls = (name) => active === name ? "active" : "";
   return `
@@ -538,6 +528,10 @@ function topNav(active) {
         <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer" title="Discord">
           <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
                onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
+        </a>
+        <a class="steam" href="/nfa" title="NFA Shop">
+          <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam"
+               onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';">
         </a>
       </div>
       <div class="topnav-tabs">
@@ -728,7 +722,6 @@ app.get("/pay/:orderId", (req, res) => {
         </div>
       </div>
 
-      <!-- Keys reveal (shown when paid) -->
       <div class="card" id="keysCard" style="display:none;padding:28px;border-color:rgba(125,221,159,0.5);margin-top:20px">
         <div style="text-align:center;margin-bottom:20px">
           <div style="font-size:44px;margin-bottom:8px">✓</div>
@@ -886,7 +879,6 @@ app.get("/pay/:orderId", (req, res) => {
 app.get("/check-payment/:orderId", async (req, res) => {
   const order = orders.get(req.params.orderId);
   if (!order) return res.json({ status: "expired" });
-
   const result = await checkOrderPayment(order);
   res.json(result);
 });
@@ -898,11 +890,9 @@ app.post("/cancel/:orderId", (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── /webhook/blockonomics (backup, doesn't mark paid by itself) ───
+// ─── /webhook/blockonomics ───
 app.get("/webhook/blockonomics", (req, res) => {
-  const orderId = req.query.order;
-  console.log(`[webhook] blockonomics order=${orderId} status=${req.query.status}`);
-  // Confirmation status is now driven by mempool.space polling.
+  console.log(`[webhook] blockonomics order=${req.query.order} status=${req.query.status}`);
   res.json({ ok: true });
 });
 
@@ -1159,11 +1149,14 @@ app.get("/", (req, res) => {
   .content{position:relative;z-index:1}
   h1{font-size:22px;margin:0 0 4px;color:#fff;background:linear-gradient(90deg,#fff,#b9a3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
-  .topnav{display:flex;align-items:center;gap:14px;margin-bottom:22px}
-  .topnav-icons a{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;text-decoration:none;transition:transform .15s,background .2s}
+  .topnav{display:flex;align-items:center;gap:14px;margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid rgba(70,70,82,0.4)}
+  .topnav-icons{display:flex;gap:10px}
+  .topnav-icons a{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;text-decoration:none;transition:transform .15s,background .2s}
   .topnav-icons a.discord{background:rgba(88,101,242,0.12);border:1px solid rgba(88,101,242,0.35)}
   .topnav-icons a.discord:hover{background:rgba(88,101,242,0.25);transform:translateY(-2px)}
-  .topnav-icons img{width:30px;height:30px;border-radius:6px;object-fit:contain}
+  .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
+  .topnav-icons a.steam:hover{background:rgba(27,40,56,0.8);transform:translateY(-2px)}
+  .topnav-icons img{width:28px;height:28px;border-radius:6px;object-fit:contain}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto}
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
@@ -1199,6 +1192,10 @@ app.get("/", (req, res) => {
         <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer">
           <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
                onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
+        </a>
+        <a class="steam" href="/nfa" title="NFA Shop">
+          <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam"
+               onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';">
         </a>
       </div>
       <div class="topnav-tabs">
