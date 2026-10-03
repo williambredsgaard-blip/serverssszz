@@ -26,6 +26,71 @@ const ADSENSE_PUB_ID = "pub-4246726390307705";
 
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
 
+// ─── INLINE SVG ICONS ───
+// Stroke-based icons inherit color via currentColor.
+// Each icon is a function of (size) so we can size per-context.
+const S = 'style="display:inline-block;vertical-align:middle;flex-shrink:0"';
+const ICONS = {
+  eye: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  bolt: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="currentColor" ${S}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  key: (s) => `<svg viewBox="0 0 24 24" width="${s||13}" height="${s||13}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L21 2M17 6l3 3M14.5 8.5l3 3"/></svg>`,
+  phone: (s) => `<svg viewBox="0 0 24 24" width="${s||13}" height="${s||13}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><rect x="7" y="2" width="10" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>`,
+  globe: (s) => `<svg viewBox="0 0 24 24" width="${s||13}" height="${s||13}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  copy: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+  play: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="currentColor" ${S}><polygon points="6 3 21 12 6 21 6 3"/></svg>`,
+  thumbUp: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="currentColor" ${S}><path d="M2 10h3v11H2zM22 10.5c0-1.4-1.1-2.5-2.5-2.5h-5.6l.9-4.4C14.9 2.5 14.1 2 13.3 2c-.7 0-1.3.4-1.6 1L7 11v10h11.4c1.2 0 2.2-.9 2.5-2l1-6c.1-.2.1-.4.1-.5v-2z"/></svg>`,
+  thumbDown: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="currentColor" ${S}><path d="M22 14h-3V3h3zM2 13.5C2 14.9 3.1 16 4.5 16h5.6l-.9 4.4c-.4 1.1.4 1.6 1.2 1.6.7 0 1.3-.4 1.6-1L17 13V3H5.6c-1.2 0-2.2.9-2.5 2l-1 6c-.1.2-.1.4-.1.5v2z"/></svg>`,
+  star: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  share: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
+  flag: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="currentColor" ${S}><path d="M5 2v20h2v-8h10l-2-3 2-3H7V2H5z"/></svg>`,
+  arrowLeft: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
+  arrowRight: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+  plus: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  check: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" ${S}><polyline points="20 6 9 17 4 12"/></svg>`,
+  verified: (s) => `<svg viewBox="0 0 24 24" width="${s||13}" height="${s||13}" ${S}><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="M7 12.5l3.5 3.5L17 9" stroke="#0b0b10" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  document: (s) => `<svg viewBox="0 0 24 24" width="${s||28}" height="${s||28}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>`,
+  externalLink: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
+};
+function tagIcon(tag) {
+  const t = String(tag).toLowerCase();
+  if (t.includes("key")) return ICONS.key(13);
+  if (t.includes("mobile") || t.includes("phone")) return ICONS.phone(13);
+  if (t.includes("universal")) return ICONS.globe(13);
+  return "";
+}
+
+// ─── SCRIPTS REGISTRY ───
+const SCRIPTS = [
+  {
+    slug: "infinite-yield",
+    name: "Infinite Yield",
+    game: "Universal",
+    subtitle: "Universal Admin Commands & Utilities",
+    description: "Infinite Yield is one of the most widely used admin command scripts for Roblox. It ships with a full command bar, ESP, fly, teleport, waypoints, chat tools, exploits, and hundreds of utility commands. Works across almost every game out of the box and needs no key.",
+    author: "Edge",
+    authorTag: "#1",
+    tags: ["Keyless", "Mobile friendly", "Universal"],
+    primaryTag: "Keyless",
+    thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1466.png",
+    rawUrl: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/refs/heads/main/infiniteyield.lua",
+    views: 1800,
+    likes: 1500,
+    posted: "2w ago"
+  }
+];
+function findScript(slug) {
+  for (const s of SCRIPTS) if (s.slug === slug) return s;
+  return null;
+}
+function loaderFor(script) {
+  return `loadstring(game:HttpGet("${script.rawUrl}"))()`;
+}
+function fmtCount(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,"") + "M";
+  if (n >= 1000)    return (n/1000).toFixed(1).replace(/\.0$/,"") + "K";
+  return String(n);
+}
+
 // ─── STATS ───
 const STATS_FILE = path.join(__dirname, "stats.json");
 let stats = { executions: 0 };
@@ -86,7 +151,7 @@ function loadState() {
       if (raw.issued) state.issued = raw.issued;
       if (raw.redeemed) state.redeemed = raw.redeemed;
       if (Array.isArray(raw.soldTo)) for (const item of stock) if (raw.soldTo[item.key]) item.soldTo = raw.soldTo[item.key];
-      console.log(`[state] loaded — issued: ${Object.keys(state.issued).length}, redeemed: ${Object.keys(state.redeemed).length}`);
+      console.log(`[state] loaded - issued: ${Object.keys(state.issued).length}, redeemed: ${Object.keys(state.redeemed).length}`);
     }
   } catch (e) { console.error("[state] load error:", e.message); }
 }
@@ -311,11 +376,11 @@ function assignKeysToOrder(order) {
   }
   saveState();
   order.assignedKeys = keys;
-  console.log(`[order] ${order.id} PAID — issued ${keys.length} keys`);
+  console.log(`[order] ${order.id} PAID - issued ${keys.length} keys`);
   return keys;
 }
 
-// ─── SHARED CURSOR FOLLOWER (red spotlight, injected into every page) ───
+// ─── SHARED CURSOR FOLLOWER ───
 const CURSOR_SCRIPT = `
 (function(){
   if (!matchMedia('(pointer:fine)').matches) return;
@@ -376,11 +441,10 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}" crossorigin="anonymous"></script>
 <style>
   *{box-sizing:border-box}
-  html{overflow-x:hidden}
-  html,body{height:100%;margin:0}
+  html{overflow-x:hidden;min-height:100%}
   body{background:#0b0b10;color:#eee;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    position:relative;overflow-x:hidden;min-height:100vh;padding:24px}
+    margin:0;position:relative;overflow-x:hidden;min-height:100vh;padding:24px}
   #bg{position:fixed;inset:0;z-index:0;pointer-events:none}
   .orb{position:fixed;border-radius:50%;filter:blur(100px);opacity:0.4;z-index:0;pointer-events:none;will-change:transform}
   .orb1{width:560px;height:560px;background:radial-gradient(circle,#8a5cff,#5a34d6);top:-180px;left:-180px;animation:drift1 24s ease-in-out infinite}
@@ -408,7 +472,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s;position:relative}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
   .topnav-tabs a.active{background:linear-gradient(135deg,rgba(120,90,255,0.2),rgba(47,143,255,0.15));color:#fff;border:1px solid rgba(120,90,255,0.35)}
-  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(3,1fr)}.topnav-tabs a{text-align:center;padding:9px 6px}}
+  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(4,1fr)}.topnav-tabs a{text-align:center;padding:9px 6px}}
   .tag{display:inline-block;padding:4px 10px;border-radius:6px;background:rgba(200,60,60,0.15);color:#ff7a7a;font-size:11px;font-weight:700;letter-spacing:0.6px;margin-bottom:14px}
   .h1{font-size:26px;font-weight:700;margin:0 0 8px;color:#fff;background:linear-gradient(90deg,#fff,#c5b3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
   .sub{color:#8a8a9a;font-size:13px;line-height:1.55;margin:0 0 24px;max-width:600px}
@@ -513,6 +577,7 @@ function topNav(active) {
       </div>
       <div class="topnav-tabs">
         <a href="/" class="${cls('store')}">Home</a>
+        <a href="/scripts" class="${cls('scripts')}">Scripts</a>
         <a href="/nfa" class="${cls('nfa')}">Steam</a>
         <a href="/redeem" class="${cls('redeem')}">Redeem</a>
       </div>
@@ -520,10 +585,314 @@ function topNav(active) {
   `;
 }
 
-// ─── ADS.TXT (required for AdSense site verification) ───
+// ─── ADS.TXT ───
 app.get("/ads.txt", (req, res) => {
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.send(`google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0\n`);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SCRIPTS ROUTES
+// ═══════════════════════════════════════════════════════════════
+const SCRIPTS_LIST_CSS = `
+  .scripts-hero{max-width:520px;margin:0 0 24px}
+  .scripts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;max-width:1000px;margin:0 auto}
+  .script-card{display:block;background:rgba(24,24,30,0.72);border:1px solid rgba(60,60,72,0.55);border-radius:14px;overflow:hidden;text-decoration:none;color:inherit;transition:transform .2s,border-color .2s,box-shadow .25s;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .script-card:hover{transform:translateY(-4px);border-color:rgba(140,105,255,0.5);box-shadow:0 18px 44px rgba(0,0,0,0.5)}
+  .script-card-thumb{position:relative;aspect-ratio:16/9;background:#12121a;overflow:hidden}
+  .script-card-thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+  .script-card:hover .script-card-thumb img{transform:scale(1.04)}
+  .script-card-stats{position:absolute;top:10px;left:10px;display:flex;gap:6px;font-size:12px;color:#fff;font-weight:600;pointer-events:none}
+  .script-card-stats span{background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);padding:4px 9px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;line-height:1}
+  .script-card-posted{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);padding:4px 9px;border-radius:6px;font-size:12px;color:#e6e6e6;font-weight:600;pointer-events:none}
+  .script-card-primary{position:absolute;bottom:10px;left:10px;background:rgba(240,170,60,0.9);color:#1a1204;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;gap:6px;line-height:1;pointer-events:none}
+  .script-card-body{padding:14px}
+  .script-card-title{font-size:15px;font-weight:700;color:#fff;line-height:1.35;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:40px}
+  .script-card-author{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#9a9aaa}
+  .script-card-author-icon{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;flex-shrink:0;overflow:hidden}
+  .script-card-author-icon img{width:100%;height:100%;object-fit:cover}
+  .script-card-author-name{color:#c9c9d2;font-weight:600}
+  .script-card-author .verified{color:#4f9bff;display:inline-flex;align-items:center}
+  .script-card-author .sep{color:#555562}
+  @media (max-width:520px){
+    .scripts-grid{grid-template-columns:1fr;gap:12px}
+    .script-card-title{font-size:14px;min-height:auto}
+  }
+`;
+
+app.get("/scripts", (req, res) => {
+  const cards = SCRIPTS.map(s => {
+    const primary = s.primaryTag || (s.tags && s.tags[0]) || "";
+    return `
+    <a href="/script/${s.slug}" class="script-card">
+      <div class="script-card-thumb">
+        <img src="${s.thumbnail}" alt="${s.name}" loading="lazy"
+             onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#1a1a24,#2a2a3a)'">
+        <div class="script-card-stats">
+          <span>${ICONS.eye(14)} ${fmtCount(s.views)}</span>
+          <span>${ICONS.bolt(14)} ${fmtCount(s.likes)}</span>
+        </div>
+        <div class="script-card-posted">${s.posted}</div>
+        ${primary ? `<div class="script-card-primary">${tagIcon(primary)}${primary}</div>` : ''}
+      </div>
+      <div class="script-card-body">
+        <div class="script-card-title">${s.name}</div>
+        <div class="script-card-author">
+          <span class="script-card-author-icon">${s.author.substring(0,1).toUpperCase()}</span>
+          <span class="script-card-author-name">${s.author}</span>
+          ${s.authorTag ? `<span class="verified">${ICONS.verified(13)}</span>` : ''}
+          <span class="sep">·</span>
+          <span>${s.game}</span>
+        </div>
+      </div>
+    </a>
+  `;}).join("");
+
+  const empty = SCRIPTS.length === 0 ? `
+    <div class="card" style="text-align:center;padding:48px 24px;max-width:480px;margin:40px auto">
+      <div style="color:#6a6a7a;display:flex;justify-content:center;margin-bottom:14px">${ICONS.document(48)}</div>
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px">No scripts yet</div>
+      <div style="color:#8a8a9a;font-size:13px">Check back soon.</div>
+    </div>
+  ` : "";
+
+  const html = pageShell("Scripts - Roblox Script Hub", `
+    ${topNav('scripts')}
+    <div class="scripts-hero">
+      <div class="tag">SCRIPTS</div>
+      <div class="h1">Browse Scripts</div>
+      <p class="sub">Every script we've verified. Click one to see the loader and copy it into your executor.</p>
+    </div>
+    ${empty || `<div class="scripts-grid">${cards}</div>`}
+  `, SCRIPTS_LIST_CSS);
+  res.set("Content-Type", "text/html").send(html);
+});
+
+app.get("/script/:slug", (req, res) => {
+  const s = findScript(req.params.slug);
+  if (!s) {
+    return res.status(404).send(pageShell("Script not found - Roblox Script Hub", `
+      ${topNav('scripts')}
+      <div style="text-align:center;padding:60px 20px">
+        <div class="h1">Script not found</div>
+        <p class="sub" style="margin:8px auto 20px">That script isn't in our catalogue.</p>
+        <a href="/scripts" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#7850ff,#2f8fff);color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Back to Scripts</a>
+      </div>
+    `));
+  }
+
+  const loader = loaderFor(s);
+  const loaderEscaped = loader.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const tagPills = (s.tags || []).map(t => {
+    const cls = String(t).toLowerCase().includes("key") ? "t-key"
+              : String(t).toLowerCase().includes("mobile") ? "t-mobile"
+              : "t-default";
+    return `<span class="script-tag ${cls}">${tagIcon(t)}${t}</span>`;
+  }).join("");
+
+  const detailCss = `
+    .script-detail-back{display:inline-flex;align-items:center;gap:6px;color:#8a8a9a;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:18px;transition:color .15s,transform .15s}
+    .script-detail-back:hover{color:#fff;transform:translateX(-2px)}
+    .script-detail-hero{display:grid;grid-template-columns:1.05fr 1fr;gap:26px;align-items:start;margin-bottom:24px}
+    .script-detail-thumb{position:relative;border-radius:12px;overflow:hidden;background:#12121a;border:1px solid rgba(60,60,72,0.55);aspect-ratio:16/9}
+    .script-detail-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .script-detail-thumb .script-card-stats{position:absolute;top:10px;left:10px}
+    .script-detail-thumb .script-card-posted{position:absolute;top:10px;right:10px}
+
+    .script-detail-info{min-width:0;padding-top:2px}
+    .script-detail-title{font-size:26px;font-weight:800;color:#fff;line-height:1.22;margin:0 0 8px;letter-spacing:-0.3px}
+    .script-detail-sub{color:#8a8a9a;font-size:14px;margin-bottom:16px}
+
+    .script-detail-author{display:flex;align-items:center;gap:11px;margin-bottom:18px;flex-wrap:wrap}
+    .script-detail-author-icon{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#7850ff,#2f8fff);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;flex-shrink:0;overflow:hidden}
+    .script-detail-author-icon img{width:100%;height:100%;object-fit:cover}
+    .script-detail-author-text{min-width:0}
+    .script-detail-author-name{font-weight:700;color:#fff;font-size:15px;display:flex;align-items:center;gap:6px;line-height:1.2}
+    .script-detail-author-name .verified{color:#4f9bff;display:inline-flex;align-items:center}
+    .script-detail-author-sub{font-size:12px;color:#8a8a9a;margin-top:3px}
+    .script-detail-follow{background:rgba(40,40,48,0.9);border:1px solid rgba(70,70,82,0.7);color:#d8d8e0;padding:8px 15px;border-radius:20px;font-size:12.5px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s;margin-left:auto}
+    .script-detail-follow:hover{background:rgba(60,60,72,1);border-color:rgba(140,105,255,0.5);color:#fff}
+
+    .script-detail-cta{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
+    .script-detail-copy{flex:1;min-width:200px;padding:15px 20px;background:linear-gradient(135deg,#4a7cf0,#3b5fd9);border:none;border-radius:10px;color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:9px;transition:transform .15s,box-shadow .2s,filter .15s;box-shadow:0 10px 24px rgba(74,124,240,0.35)}
+    .script-detail-copy:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(74,124,240,0.5);filter:brightness(1.06)}
+    .script-detail-copy.copied{background:linear-gradient(135deg,#3aa663,#2f8a52);box-shadow:0 10px 26px rgba(58,166,99,0.4);filter:none;transform:none}
+    .script-detail-play{padding:15px 24px;background:rgba(40,40,48,0.85);border:1px solid rgba(70,70,82,0.7);border-radius:10px;color:#e0e0e8;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:9px;transition:background .15s,border-color .15s,transform .15s}
+    .script-detail-play:hover{background:rgba(58,58,70,0.95);border-color:rgba(140,105,255,0.5);transform:translateY(-2px)}
+
+    .script-detail-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+    .script-tag{font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;display:inline-flex;align-items:center;gap:7px;line-height:1.1}
+    .script-tag.t-default{background:rgba(60,60,72,0.6);border:1px solid rgba(90,90,105,0.6);color:#c4c4d0}
+    .script-tag.t-key{background:rgba(240,170,60,0.14);border:1px solid rgba(240,170,60,0.4);color:#f0b356}
+    .script-tag.t-mobile{background:rgba(90,190,220,0.1);border:1px solid rgba(90,190,220,0.35);color:#7dc9e0}
+
+    .script-detail-actions{display:flex;gap:8px;margin-top:22px;padding-top:18px;border-top:1px solid rgba(70,70,82,0.4);flex-wrap:wrap;align-items:center}
+    .script-detail-vote{display:flex;background:rgba(40,40,48,0.85);border:1px solid rgba(70,70,82,0.6);border-radius:10px;overflow:hidden;height:38px}
+    .script-detail-vote button{background:transparent;border:none;color:#a8a8b8;font-family:inherit;font-size:13.5px;font-weight:700;padding:0 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .15s,color .15s}
+    .script-detail-vote button:hover{background:rgba(255,255,255,0.05);color:#fff}
+    .script-detail-vote .up:hover{color:#7ddd9f}
+    .script-detail-vote .down:hover{color:#ff7a7a}
+    .script-detail-vote .divider{width:1px;background:rgba(70,70,82,0.7)}
+    .script-detail-action{background:rgba(40,40,48,0.85);border:1px solid rgba(70,70,82,0.6);border-radius:10px;color:#b8b8c4;font-family:inherit;font-size:13.5px;font-weight:600;padding:0 16px;height:38px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .15s,color .15s,border-color .15s;text-decoration:none}
+    .script-detail-action:hover{background:rgba(58,58,70,0.95);color:#fff}
+    .script-detail-action.report{color:#e8665a}
+    .script-detail-action.report:hover{color:#ff7a7a;border-color:rgba(255,120,120,0.4)}
+
+    .script-tabs{display:flex;gap:6px;margin-top:32px;border-bottom:1px solid rgba(70,70,82,0.4)}
+    .script-tab{background:transparent;border:none;font-family:inherit;font-size:14.5px;font-weight:600;color:#8a8a9a;padding:12px 4px;margin-right:22px;cursor:pointer;position:relative;transition:color .15s}
+    .script-tab:hover{color:#d0d0dc}
+    .script-tab.active{color:#fff}
+    .script-tab.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:#4a7cf0;border-radius:2px 2px 0 0}
+    .script-tab-count{background:rgba(120,90,255,0.25);color:#c5b3ff;font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;margin-left:7px;display:inline-block;line-height:1.5}
+
+    .script-panel{display:none;padding:24px 0}
+    .script-panel.active{display:block}
+    .script-panel h3{font-size:12px;font-weight:700;color:#8a8a9a;margin:0 0 12px;text-transform:uppercase;letter-spacing:1.2px}
+    .script-panel p{color:#b4b4c0;font-size:14px;line-height:1.7;margin:0 0 14px}
+    .script-loader{position:relative;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:rgba(10,10,16,0.95);border:1px solid rgba(60,60,72,0.7);border-radius:10px;padding:18px 18px;color:#b9a3ff;word-break:break-all;line-height:1.65;user-select:all;overflow-x:auto;white-space:pre-wrap}
+    .script-loader-copy{position:absolute;top:10px;right:10px;background:rgba(74,124,240,0.18);border:1px solid rgba(74,124,240,0.5);color:#a8bff0;padding:6px 12px;border-radius:6px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:background .15s}
+    .script-loader-copy:hover{background:rgba(74,124,240,0.35);color:#fff}
+    .script-loader-hint{color:#6a6a7a;font-size:12px;margin-top:10px;line-height:1.6}
+    .script-detail-banner{margin-top:26px;padding:14px 18px;background:rgba(200,120,40,0.08);border:1px solid rgba(220,160,60,0.3);border-radius:10px;color:#e8c07a;font-size:12.5px;line-height:1.6}
+    .script-detail-banner b{color:#f0c060}
+
+    @media (max-width:760px){
+      .script-detail-hero{grid-template-columns:1fr;gap:18px}
+      .script-detail-title{font-size:20px}
+      .script-detail-follow{margin-left:0}
+    }
+  `;
+
+  const detailJs = `
+    (function(){
+      const btns = document.querySelectorAll('.script-tab');
+      const panels = document.querySelectorAll('.script-panel');
+      btns.forEach(b => b.addEventListener('click', () => {
+        const target = b.dataset.tab;
+        btns.forEach(x => x.classList.toggle('active', x === b));
+        panels.forEach(p => p.classList.toggle('active', p.dataset.panel === target));
+      }));
+
+      const loaderText = document.getElementById('loaderText').innerText.replace(/Copy$/,'').trim();
+
+      function doCopy(btn, label, okLabel) {
+        const done = () => {
+          btn.classList.add('copied');
+          btn.textContent = okLabel;
+          setTimeout(() => { btn.classList.remove('copied'); btn.textContent = label; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(loaderText).then(done).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = loaderText; document.body.appendChild(ta);
+            ta.select(); try { document.execCommand('copy'); } catch(e){}
+            document.body.removeChild(ta); done();
+          });
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = loaderText; document.body.appendChild(ta);
+          ta.select(); try { document.execCommand('copy'); } catch(e){}
+          document.body.removeChild(ta); done();
+        }
+      }
+
+      const bigBtn = document.getElementById('bigCopyBtn');
+      if (bigBtn) bigBtn.addEventListener('click', () => doCopy(bigBtn, bigBtn.dataset.label, bigBtn.dataset.labelOk));
+
+      const smallBtn = document.getElementById('loaderCopy');
+      if (smallBtn) smallBtn.addEventListener('click', () => {
+        const label = smallBtn.textContent;
+        const okLabel = 'Copied';
+        const done = () => { smallBtn.textContent = okLabel; setTimeout(() => smallBtn.textContent = label, 1600); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(loaderText).then(done).catch(done);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = loaderText; document.body.appendChild(ta);
+          ta.select(); try { document.execCommand('copy'); } catch(e){}
+          document.body.removeChild(ta); done();
+        }
+      });
+    })();
+  `;
+
+  const html = pageShell(`${s.name} - Roblox Script Hub`, `
+    ${topNav('scripts')}
+    <a href="/scripts" class="script-detail-back">${ICONS.arrowLeft(15)} Back to Scripts</a>
+
+    <div class="script-detail-hero">
+      <div class="script-detail-thumb">
+        <img src="${s.thumbnail}" alt="${s.name}"
+             onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#1a1a24,#2a2a3a)'">
+        <div class="script-card-stats">
+          <span>${ICONS.eye(14)} ${fmtCount(s.views)}</span>
+          <span>${ICONS.bolt(14)} ${fmtCount(s.likes)}</span>
+        </div>
+        <div class="script-card-posted">${s.posted}</div>
+      </div>
+
+      <div class="script-detail-info">
+        <h1 class="script-detail-title">${s.name}</h1>
+        <div class="script-detail-sub">${s.subtitle}</div>
+
+        <div class="script-detail-author">
+          <div class="script-detail-author-icon">${s.author.substring(0,1).toUpperCase()}</div>
+          <div class="script-detail-author-text">
+            <div class="script-detail-author-name">${s.author} ${s.authorTag ? `<span class="verified">${ICONS.verified(14)}</span>` : ''}</div>
+            <div class="script-detail-author-sub">${s.posted} · ${s.game}</div>
+          </div>
+          <a href="#" class="script-detail-follow" onclick="return false">${ICONS.plus(14)} Follow</a>
+        </div>
+
+        <div class="script-detail-cta">
+          <button class="script-detail-copy" id="bigCopyBtn" data-label="Copy Script" data-label-ok="Copied">${ICONS.copy(17)} <span>Copy Script</span></button>
+          <a class="script-detail-play" href="${s.rawUrl}" target="_blank" rel="noopener noreferrer">${ICONS.play(15)} <span>Play</span></a>
+        </div>
+
+        <div class="script-detail-tags">${tagPills}</div>
+
+        <div class="script-detail-actions">
+          <div class="script-detail-vote">
+            <button class="up">${ICONS.thumbUp(15)} ${fmtCount(s.likes)}</button>
+            <div class="divider"></div>
+            <button class="down">${ICONS.thumbDown(15)} 0</button>
+          </div>
+          <button class="script-detail-action">${ICONS.star(15)} Save</button>
+          <button class="script-detail-action">${ICONS.share(15)} Share</button>
+          <button class="script-detail-action report">${ICONS.flag(15)} Report</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="script-tabs">
+      <button class="script-tab active" data-tab="overview">Overview</button>
+      <button class="script-tab" data-tab="getscript">Get script</button>
+      <button class="script-tab" data-tab="comments">Comments <span class="script-tab-count">1</span></button>
+    </div>
+
+    <div class="script-panel active" data-panel="overview">
+      <h3>About this script</h3>
+      <p>${s.description}</p>
+    </div>
+
+    <div class="script-panel" data-panel="getscript">
+      <h3>Loader</h3>
+      <p>Paste this into your executor's script box and hit execute. The loader fetches the latest version of the script directly from the source, so you never need to re-copy when it updates.</p>
+      <div class="script-loader" id="loaderText">${loaderEscaped}<button class="script-loader-copy" id="loaderCopy">Copy</button></div>
+      <div class="script-loader-hint">Works with Synapse, Script-Ware, Krnl, Fluxus, Delta, Solara, and most other modern executors.</div>
+    </div>
+
+    <div class="script-panel" data-panel="comments">
+      <h3>Comments</h3>
+      <p>No comments yet. Be the first.</p>
+    </div>
+
+    <div class="script-detail-banner">
+      <b>Heads-up:</b> Never share your Roblox password or cookies with anyone. Scripts are safe to paste into your executor, but only download them from sources you trust.
+    </div>
+  `, detailCss, detailJs);
+
+  res.set("Content-Type", "text/html").send(html);
 });
 
 // ─── /nfa ───
@@ -534,7 +903,7 @@ app.get("/nfa", (req, res) => {
     : "background:rgba(90,40,40,0.6);border:1px solid rgba(220,90,90,0.4);color:#ff9a9a;";
   const stockText = available > 0 ? (available + " in stock") : "Out of stock";
 
-  const html = pageShell("NFA Loader — Roblox Script Hub", `
+  const html = pageShell("NFA Loader - Roblox Script Hub", `
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">NFA Loader</div>
@@ -543,7 +912,7 @@ app.get("/nfa", (req, res) => {
     <div class="card" style="max-width:480px;border-color:rgba(200,60,60,0.5)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:18px;font-weight:600;color:#fff">CS2 Prime Account</div>
-        <div style="${stockColor}padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">● ${stockText}</div>
+        <div style="${stockColor}padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">${stockText}</div>
       </div>
       <div style="color:#8a8a9a;font-size:13px;line-height:1.5;margin-bottom:18px">
         Prime enabled. Premier is not unlocked.
@@ -557,7 +926,7 @@ app.get("/nfa", (req, res) => {
         <button onclick="inc()" style="background:transparent;border:none;color:#eee;
                 font-size:20px;padding:12px 22px;cursor:pointer;transition:background .15s">+</button>
       </div>
-      <button class="btn" onclick="goCart()">Add to cart →</button>
+      <button class="btn" onclick="goCart()">Add to cart</button>
     </div>
 
     <script>
@@ -580,7 +949,7 @@ app.get("/cart", (req, res) => {
   const available = availableStock().length;
   const hasStock = available >= qty;
 
-  const html = pageShell("Cart — Roblox Script Hub", `
+  const html = pageShell("Cart - Roblox Script Hub", `
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">Your Cart</div>
@@ -589,7 +958,7 @@ app.get("/cart", (req, res) => {
     <div class="card" style="display:flex;align-items:center;gap:16px;max-width:640px;margin-bottom:20px">
       <div style="width:52px;height:52px;border-radius:10px;background:rgba(200,60,60,0.15);
                   border:1px solid rgba(200,60,60,0.4);display:flex;align-items:center;
-                  justify-content:center;font-size:22px">🛒</div>
+                  justify-content:center;color:#ff9a9a">${ICONS.document(24)}</div>
       <div style="flex:1">
         <div class="label" style="margin:0">Total</div>
         <div style="font-size:22px;font-weight:700;color:#fff">€<span id="cartTotal">${total}</span></div>
@@ -601,14 +970,14 @@ app.get("/cart", (req, res) => {
       <div class="label">Payment Method</div>
       <div class="coin-grid">
         <div class="coin selected" id="coinBTC" onclick="selectCoin('BTC')">
-          <div class="coin-icon btc">₿</div>
+          <div class="coin-icon btc">B</div>
           <div class="coin-meta">
             <div class="coin-name">Bitcoin</div>
             <div class="coin-desc">BTC · 2 confirmations</div>
           </div>
         </div>
         <div class="coin" id="coinUSDT" onclick="selectCoin('USDT')">
-          <div class="coin-icon usdt">₮</div>
+          <div class="coin-icon usdt">T</div>
           <div class="coin-meta">
             <div class="coin-name">USDT</div>
             <div class="coin-desc">Tether · Ethereum</div>
@@ -618,10 +987,10 @@ app.get("/cart", (req, res) => {
     </div>
 
     ${hasStock ? '' : `<div class="card" style="max-width:640px;border-color:rgba(200,60,60,0.5);color:#ff9a9a;margin-bottom:20px">
-      Not enough stock — only ${available} available.
+      Not enough stock - only ${available} available.
     </div>`}
 
-    <button class="btn" style="max-width:640px" id="payBtn" onclick="checkout()" ${hasStock ? '' : 'disabled'}>Pay with Bitcoin →</button>
+    <button class="btn" style="max-width:640px" id="payBtn" onclick="checkout()" ${hasStock ? '' : 'disabled'}>Pay with Bitcoin</button>
     <div id="err" style="color:#ff7a7a;margin-top:16px;display:none;max-width:640px"></div>
 
     <script>
@@ -632,7 +1001,7 @@ app.get("/cart", (req, res) => {
         coin = c;
         document.getElementById('coinBTC').classList.toggle('selected', c === 'BTC');
         document.getElementById('coinUSDT').classList.toggle('selected', c === 'USDT');
-        document.getElementById('payBtn').textContent = 'Pay with ' + (c === 'BTC' ? 'Bitcoin' : 'USDT') + ' →';
+        document.getElementById('payBtn').textContent = 'Pay with ' + (c === 'BTC' ? 'Bitcoin' : 'USDT');
       }
 
       async function checkout(){
@@ -649,7 +1018,7 @@ app.get("/cart", (req, res) => {
           window.location.href = '/pay/' + data.orderId;
         } catch (e) {
           btn.disabled = false;
-          btn.textContent = 'Pay with ' + (coin === 'BTC' ? 'Bitcoin' : 'USDT') + ' →';
+          btn.textContent = 'Pay with ' + (coin === 'BTC' ? 'Bitcoin' : 'USDT');
           document.getElementById('err').style.display = 'block';
           document.getElementById('err').textContent = 'Error: ' + e.message;
         }
@@ -685,7 +1054,7 @@ app.post("/checkout", async (req, res) => {
       txid: null, confirmations: 0, assignedKeys: null,
     };
     orders.set(orderId, order);
-    console.log(`[order] created ${orderId} — ${qty} × $${PRODUCT_PRICE_USD} = $${totalUsd} in ${coin} → ${address}`);
+    console.log(`[order] created ${orderId} - ${qty} x $${PRODUCT_PRICE_USD} = $${totalUsd} in ${coin} -> ${address}`);
 
     res.json({ ok: true, orderId });
   } catch (e) {
@@ -698,7 +1067,7 @@ app.post("/checkout", async (req, res) => {
 app.get("/pay/:orderId", (req, res) => {
   const order = orders.get(req.params.orderId);
   if (!order) {
-    return res.status(404).send(pageShell("Order not found — Roblox Script Hub", `
+    return res.status(404).send(pageShell("Order not found - Roblox Script Hub", `
       ${topNav('nfa')}
       <div style="text-align:center;padding:60px 20px">
         <div class="h1">Order not found</div>
@@ -738,7 +1107,7 @@ app.get("/pay/:orderId", (req, res) => {
     ? `<script src="https://blockonomics.co/js/web3-payment.js"></script>`
     : '';
 
-  const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol} — Roblox Script Hub`, `
+  const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol} - Roblox Script Hub`, `
     ${topNav('nfa')}
     <div style="max-width:560px;margin:0 auto;position:relative">
       <button id="cancelBtn" onclick="cancelOrder()" style="position:absolute;top:16px;left:16px;z-index:2;
@@ -752,11 +1121,11 @@ app.get("/pay/:orderId", (req, res) => {
                       background:rgba(224,58,58,0.15);border:1px solid rgba(224,58,58,0.4);
                       font-size:11px;font-weight:700;color:#ff9a9a;text-transform:uppercase;
                       letter-spacing:1px;margin-bottom:12px">
-            ${isBTC ? "₿" : "₮"} ${coinName}
+            ${coinName}
           </div>
           <div class="label" style="margin-bottom:6px">Send exactly</div>
           <div style="font-size:26px;font-weight:700;color:#fff">${order.cryptoAmount} <span style="color:#8a8a9a;font-size:16px">${coinSymbol}</span></div>
-          <div style="color:#8a8a9a;font-size:12px;margin-top:4px">≈ €${order.totalUsd.toFixed(2)} · ${order.qty} account${order.qty !== 1 ? "s" : ""}</div>
+          <div style="color:#8a8a9a;font-size:12px;margin-top:4px">= €${order.totalUsd.toFixed(2)} · ${order.qty} account${order.qty !== 1 ? "s" : ""}</div>
         </div>
         <div style="display:flex;justify-content:center;margin-bottom:20px">
           <img src="${qrUrl}" alt="QR" style="border-radius:12px;background:#fff;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4)"/>
@@ -785,7 +1154,7 @@ app.get("/pay/:orderId", (req, res) => {
 
       <div class="card" id="keysCard" style="display:none;padding:28px;border-color:rgba(125,221,159,0.5);margin-top:20px">
         <div style="text-align:center;margin-bottom:20px">
-          <div style="font-size:44px;margin-bottom:8px">✓</div>
+          <div style="color:#7ddd9f;display:flex;justify-content:center;margin-bottom:8px">${ICONS.check(44)}</div>
           <div class="h1" style="font-size:20px;text-align:center">Payment confirmed</div>
           <p class="sub" style="text-align:center;margin:8px auto 16px;max-width:100%">
             Save your key${order.qty !== 1 ? "s" : ""} below. Redeem ${order.qty !== 1 ? "each one" : "it"} at
@@ -814,7 +1183,7 @@ app.get("/pay/:orderId", (req, res) => {
         </div>
         <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:10px">Payment failed</div>
         <div style="color:#a8a8b8;font-size:14px;line-height:1.55;margin-bottom:24px">
-          Transaction canceled because nothing was sent within the 15 minutes time,
+          Transaction canceled because nothing was sent within the 15 minutes time.
           Please contact the owner if you actually sent the ${coinName}.
         </div>
         <a href="/nfa" style="display:inline-block;padding:11px 28px;background:linear-gradient(135deg,#7850ff,#2f8fff);
@@ -873,7 +1242,7 @@ app.get("/pay/:orderId", (req, res) => {
       window.copyText = function(el){
         navigator.clipboard.writeText(el.textContent);
         const old = el.textContent;
-        el.textContent = '✓ Copied!';
+        el.textContent = 'Copied';
         setTimeout(() => el.textContent = old, 1200);
       };
 
@@ -918,7 +1287,7 @@ app.get("/pay/:orderId", (req, res) => {
 
           if (data.status === 'paid'){
             paid = true;
-            document.getElementById('timer').textContent = '✓';
+            document.getElementById('timer').textContent = 'OK';
             document.getElementById('timer').style.color = '#7ddd9f';
             document.getElementById('confStatus').textContent = 'Payment confirmed!';
             paintConfirmations(REQUIRED);
@@ -1041,7 +1410,7 @@ app.get("/webhook/blockonomics", (req, res) => {
 
 // ─── /redeem ───
 app.get("/redeem", (req, res) => {
-  const html = pageShell("Redeem — Roblox Script Hub", `
+  const html = pageShell("Redeem - Roblox Script Hub", `
     ${topNav('redeem')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">Redeem &amp; Replacements</div>
@@ -1091,7 +1460,7 @@ app.get("/redeem", (req, res) => {
           });
           const data = await r.json();
           if (data.ok) {
-            title.textContent = '✓ Success — Save this now';
+            title.textContent = 'Success - Save this now';
             result.classList.remove('error');
             body.innerHTML = '<div style="color:#a8a8b8;font-size:13px;margin-bottom:10px">Account credential (click to select, then copy):</div>' +
               '<div class="cred" id="credBox" onclick="copyCred()" style="cursor:pointer">' + data.credential.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</div>' +
@@ -1100,13 +1469,13 @@ app.get("/redeem", (req, res) => {
             document.getElementById('keyInput').value = '';
             window.__cred = data.credential;
           } else {
-            title.textContent = '✗ Failed';
+            title.textContent = 'Failed';
             result.classList.add('error');
             body.innerHTML = '<div style="color:#ff9a9a;font-size:13px">' + (data.error || 'Could not redeem key.').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</div>';
           }
           result.style.display = 'block';
         } catch (e) {
-          title.textContent = '✗ Error';
+          title.textContent = 'Error';
           result.classList.add('error');
           body.innerHTML = '<div style="color:#ff9a9a;font-size:13px">Network error. Try again.</div>';
           result.style.display = 'block';
@@ -1273,7 +1642,9 @@ app.get("/clients", async (req, res) => {
   res.json({ users: users.map(u => ({ ...u, thumbnail: thumbs[u.userId] || null })), executions: stats.executions });
 });
 
-// ─── MAIN DASHBOARD ───
+// ═══════════════════════════════════════════════════════════════
+//  MAIN DASHBOARD
+// ═══════════════════════════════════════════════════════════════
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
@@ -1282,12 +1653,11 @@ app.get("/", (req, res) => {
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4246726390307705" crossorigin="anonymous"></script>
 <style>
   *{box-sizing:border-box}
-  html{overflow-x:hidden}
-  html,body{height:100%;margin:0}
+  html{overflow-x:hidden;min-height:100%}
   body{
     background:#0b0b10;color:#eee;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    padding:24px 24px 40px;position:relative;overflow-x:hidden;min-height:100vh;
+    padding:24px 24px 40px;position:relative;overflow-x:hidden;min-height:100vh;margin:0;
   }
   #bg{position:fixed;inset:0;z-index:0;pointer-events:none}
   .orb{position:fixed;border-radius:50%;filter:blur(110px);opacity:0.42;z-index:0;pointer-events:none;will-change:transform}
@@ -1369,7 +1739,6 @@ app.get("/", (req, res) => {
   .stat .value{font-size:22px;font-weight:700;color:#fff;margin-top:2px;position:relative}
   .stat .value.accent{color:#c5b3ff;text-shadow:0 0 20px rgba(140,105,255,0.5)}
 
-  /* ── Grid: fixed row height, no stretch, scroll when overflowing ── */
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
@@ -1439,8 +1808,83 @@ app.get("/", (req, res) => {
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   }
 
-  /* ── Promo slots: neutrally-named so uBlock/EasyList do NOT cosmetic-filter.
-        Each reserves real height so no layout jump when AdSense fills or collapses. ── */
+  .hub-info{
+    max-width:970px;
+    margin:24px auto 0;
+    padding:22px 24px;
+    background:rgba(28,28,34,0.55);
+    border:1px solid rgba(90,90,105,0.5);
+    border-radius:14px;
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+  }
+  .hub-info-title{
+    font-size:18px;
+    font-weight:700;
+    color:#b8b8c4;
+    margin-bottom:10px;
+    letter-spacing:0.2px;
+  }
+  .hub-info-body{
+    font-size:14px;
+    line-height:1.65;
+    color:#8a8a9a;
+  }
+
+  .scripts-card{
+    display:flex;align-items:center;gap:14px;
+    max-width:970px;
+    margin:14px auto 0;
+    padding:16px 20px;
+    background:rgba(28,28,34,0.6);
+    border:1px solid rgba(90,90,105,0.5);
+    border-radius:14px;
+    text-decoration:none;color:inherit;
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    transition:transform .2s cubic-bezier(.2,.9,.3,1.1),border-color .2s,box-shadow .25s;
+    position:relative;overflow:hidden;
+    min-height:96px;
+    cursor:pointer;
+  }
+  .scripts-card::before{
+    content:'';position:absolute;inset:0;border-radius:14px;
+    background:linear-gradient(135deg,rgba(120,90,255,0.10),transparent 50%);
+    opacity:0;transition:opacity .25s;pointer-events:none;
+  }
+  .scripts-card:hover{transform:translateY(-3px);border-color:rgba(140,105,255,0.55);box-shadow:0 16px 40px rgba(0,0,0,0.4),0 0 0 1px rgba(140,105,255,0.15)}
+  .scripts-card:hover::before{opacity:1}
+  .scripts-card-icon{
+    width:60px;height:60px;border-radius:12px;
+    background:linear-gradient(135deg,rgba(120,90,255,0.22),rgba(47,143,255,0.14));
+    border:1px solid rgba(120,90,255,0.35);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;position:relative;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3);
+    color:#b9a3ff;
+  }
+  .scripts-card-meta{min-width:0;flex:1;position:relative}
+  .scripts-card-name{
+    font-weight:600;color:#fff;font-size:14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .scripts-card-sub{
+    color:#9a9aaa;font-size:12px;margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .scripts-card-count{
+    background:rgba(120,90,255,0.18);color:#b9a3ff;
+    font-size:11px;font-weight:700;
+    padding:2px 9px;border-radius:10px;
+    border:1px solid rgba(120,90,255,0.35);
+  }
+  .scripts-card-arrow{
+    color:#6a6a7a;
+    transition:color .15s,transform .15s;
+    flex-shrink:0;
+    display:flex;align-items:center;
+  }
+  .scripts-card:hover .scripts-card-arrow{color:#b9a3ff;transform:translateX(3px)}
+
   .promo-slot{
     width:100%;
     max-width:970px;
@@ -1479,7 +1923,7 @@ app.get("/", (req, res) => {
     }
     .topnav-tabs{
       margin-left:0;width:100%;
-      display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+      display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
     }
     .topnav-tabs a{
       text-align:center;padding:9px 4px;font-size:12px;
@@ -1500,6 +1944,13 @@ app.get("/", (req, res) => {
     .av{width:52px;height:52px}
     .name{font-size:13px}
     .game{font-size:11px}
+
+    .hub-info{margin-top:16px;padding:18px;border-radius:12px}
+    .hub-info-title{font-size:16px;margin-bottom:8px}
+    .hub-info-body{font-size:13px}
+
+    .scripts-card{margin-top:10px;padding:12px;min-height:88px;gap:10px}
+    .scripts-card-icon{width:52px;height:52px}
 
     .promo-slot{
       max-width:100%;
@@ -1526,6 +1977,7 @@ app.get("/", (req, res) => {
       </div>
       <div class="topnav-tabs">
         <a href="/" class="active">Home</a>
+        <a href="/scripts">Scripts</a>
         <a href="/nfa">Steam</a>
         <a href="/redeem">Redeem</a>
       </div>
@@ -1543,6 +1995,20 @@ app.get("/", (req, res) => {
     </div>
 
     <div class="grid" id="grid"><div class="empty">No clients connected</div></div>
+
+    <div class="hub-info">
+      <div class="hub-info-title">What is Roblox Script Hub?</div>
+      <div class="hub-info-body">Roblox Scripts Hub is a publicly available site where you can browse your favorite Scripts of your choice, just one click and you get access to the Script!</div>
+    </div>
+
+    <a href="/scripts" class="scripts-card">
+      <div class="scripts-card-icon">${ICONS.document(30)}</div>
+      <div class="scripts-card-meta">
+        <div class="scripts-card-name">Scripts <span class="scripts-card-count">${SCRIPTS.length}</span></div>
+        <div class="scripts-card-sub">Browse all available scripts</div>
+      </div>
+      <div class="scripts-card-arrow">${ICONS.arrowRight(18)}</div>
+    </a>
 
     <div class="promo-slot" id="promoSlot">
       <div class="promo-tag">Sponsored</div>
@@ -1608,14 +2074,11 @@ const FB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns=
   tk()
 })();
 
-// AdSense push — one push per <ins> element. Loader in <head> covers both slots.
 (function(){
   try {
     (window.adsbygoogle = window.adsbygoogle || []).push({});
     (window.adsbygoogle = window.adsbygoogle || []).push({});
-  } catch (e) {
-    // AdSense not ready / blocked — safe to ignore, layout keeps its reserved height.
-  }
+  } catch (e) {}
 })();
 
 async function rf(){
@@ -1646,14 +2109,14 @@ setInterval(rf,2000);
 // ─── 404 ───
 app.use((req, res) => {
   const safePath = String(req.originalUrl || "/").replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-  res.status(404).set("Content-Type", "text/html").send(pageShell("Not Found — Roblox Script Hub", `
+  res.status(404).set("Content-Type", "text/html").send(pageShell("Not Found - Roblox Script Hub", `
     ${topNav('none')}
     <div style="max-width:520px;margin:0 auto;text-align:center;padding:36px 24px">
       <div style="display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;
-                  border-radius:16px;margin-bottom:16px;background:rgba(120,90,255,0.14);border:1px solid rgba(120,90,255,0.4)">
-        <svg viewBox="0 0 24 24" style="width:34px;height:34px;stroke:#b9a3ff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round">
+                  border-radius:16px;margin-bottom:16px;background:rgba(120,90,255,0.14);border:1px solid rgba(120,90,255,0.4);color:#b9a3ff">
+        <svg viewBox="0 0 24 24" style="width:34px;height:34px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round">
           <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/>
-          <circle cx="12" cy="16.5" r="0.9" fill="#b9a3ff" stroke="none"/>
+          <circle cx="12" cy="16.5" r="0.9" fill="currentColor" stroke="none"/>
         </svg>
       </div>
       <div class="h1" style="text-align:center">Page Not Found</div>
@@ -1674,4 +2137,5 @@ server.listen(PORT, async () => {
   console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
   console.log(`[boot] ads.txt will serve: google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0`);
   console.log(`[boot] AdSense client: ${ADSENSE_CLIENT}`);
+  console.log(`[boot] scripts loaded: ${SCRIPTS.length} (${SCRIPTS.map(s => s.slug).join(", ")})`);
 });
