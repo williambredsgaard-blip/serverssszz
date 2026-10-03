@@ -605,5 +605,196 @@ setInterval(refresh, 2000);
 </script></body></html>`);
 });
 
+// ─── 404 catch-all (must be after every other route) ───
+// Any unknown path — /dedwe, /foo, /whatever — returns a themed
+// "doesn't exist yet" page with the same background animation
+// and an Okay button that sends them back to the homepage.
+app.use((req, res) => {
+  const requestedPath = req.originalUrl || req.url || "/";
+  const safePath = String(requestedPath).replace(/[<>&"]/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;'
+  }[c]));
+
+  res.status(404).set("Content-Type", "text/html").send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Page Not Found — Script Hub</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:#0b0b10;
+    color:#eee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+  }
+  #bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .orb{
+    position:fixed;border-radius:50%;filter:blur(90px);opacity:0.35;
+    z-index:0;pointer-events:none;will-change:transform;
+  }
+  .orb1{width:480px;height:480px;background:#7850ff;top:-140px;left:-140px;
+    animation:drift1 22s ease-in-out infinite}
+  .orb2{width:560px;height:560px;background:#2f8fff;bottom:-180px;right:-160px;
+    animation:drift2 26s ease-in-out infinite}
+  .orb3{width:360px;height:360px;background:#ff4fa0;top:40%;left:55%;
+    animation:drift3 30s ease-in-out infinite;opacity:0.18}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(70px,90px) scale(1.1)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-90px,-60px) scale(1.15)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-60px,60px) scale(0.9)}}
+  .scanline{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 3px);
+    mix-blend-mode:overlay;
+  }
+  .vignette{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.7) 100%);
+  }
+
+  .wrap{
+    position:relative;z-index:1;
+    max-width:520px;width:calc(100% - 40px);
+    padding:36px 32px;
+    background:rgba(28,28,34,0.72);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(70,70,82,0.7);
+    border-radius:16px;
+    text-align:center;
+    box-shadow:0 24px 60px rgba(0,0,0,0.55);
+    animation:pop .35s cubic-bezier(.2,.9,.3,1.1);
+  }
+  @keyframes pop{
+    from{opacity:0;transform:translateY(12px) scale(0.97)}
+    to{opacity:1;transform:translateY(0) scale(1)}
+  }
+  .icon{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:64px;height:64px;border-radius:16px;margin-bottom:16px;
+    background:rgba(120,90,255,0.14);
+    border:1px solid rgba(120,90,255,0.4);
+  }
+  .icon svg{width:34px;height:34px;stroke:#b9a3ff;fill:none;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round}
+  h1{
+    font-size:20px;margin:0 0 10px;color:#fff;
+    background:linear-gradient(90deg,#fff,#b9a3ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    letter-spacing:0.2px;
+  }
+  .msg{color:#a8a8b8;font-size:14px;line-height:1.55;margin:0 0 20px}
+  .path{
+    display:block;margin:0 auto 22px;padding:8px 12px;
+    background:rgba(18,18,24,0.7);
+    border:1px solid rgba(70,70,82,0.6);
+    border-radius:8px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;color:#8a8a9a;
+    word-break:break-all;max-width:100%;
+  }
+  .okay{
+    display:inline-block;padding:11px 28px;
+    background:linear-gradient(135deg,#7850ff,#2f8fff);
+    color:#fff;font-weight:600;font-size:14px;
+    border:none;border-radius:10px;cursor:pointer;
+    text-decoration:none;
+    box-shadow:0 8px 24px rgba(120,80,255,0.4);
+    transition:transform .15s ease,box-shadow .2s ease,filter .15s ease;
+    font-family:inherit;
+  }
+  .okay:hover{
+    transform:translateY(-2px);
+    box-shadow:0 12px 30px rgba(120,80,255,0.55);
+    filter:brightness(1.08);
+  }
+  .okay:active{transform:translateY(0);filter:brightness(0.95)}
+</style></head>
+<body>
+  <canvas id="bg"></canvas>
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+  <div class="scanline"></div>
+  <div class="vignette"></div>
+
+  <div class="wrap">
+    <div class="icon">
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <circle cx="12" cy="16.5" r="0.9" fill="#b9a3ff" stroke="none"/>
+      </svg>
+    </div>
+    <h1>Page Not Found</h1>
+    <p class="msg">The link you tried to go to doesn't exist yet. Please try again later.</p>
+    <span class="path">${safePath}</span>
+    <br>
+    <a class="okay" href="/">Okay</a>
+  </div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('bg');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
+  let W, H;
+  function resize(){
+    W = canvas.width = innerWidth * DPR;
+    H = canvas.height = innerHeight * DPR;
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+  }
+  resize();
+  addEventListener('resize', resize);
+
+  const N = Math.min(80, Math.max(35, Math.floor(innerWidth / 24)));
+  const parts = Array.from({length: N}, () => ({
+    x: Math.random()*W, y: Math.random()*H,
+    vx: (Math.random()-0.5)*0.25*DPR,
+    vy: (Math.random()-0.5)*0.25*DPR,
+    r: (Math.random()*1.4+0.6)*DPR,
+    hue: Math.random() < 0.5 ? 265 : 210
+  }));
+
+  const MAX_D = 150 * DPR;
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<parts.length;i++){
+      const a = parts[i];
+      for(let j=i+1;j<parts.length;j++){
+        const b = parts[j];
+        const dx = a.x-b.x, dy = a.y-b.y;
+        const d2 = dx*dx + dy*dy;
+        if(d2 < MAX_D*MAX_D){
+          const alpha = (1 - Math.sqrt(d2)/MAX_D) * 0.22;
+          ctx.strokeStyle = 'rgba(140,110,255,' + alpha + ')';
+          ctx.lineWidth = 0.7 * DPR;
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    for(const p of parts){
+      p.x += p.vx; p.y += p.vy;
+      if(p.x<0||p.x>W) p.vx *= -1;
+      if(p.y<0||p.y>H) p.vy *= -1;
+      const grad = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+      grad.addColorStop(0,'hsla('+p.hue+',90%,75%,0.9)');
+      grad.addColorStop(1,'hsla('+p.hue+',90%,75%,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r*4,0,Math.PI*2);
+      ctx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+</script></body></html>`);
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log("Relay on " + PORT));
