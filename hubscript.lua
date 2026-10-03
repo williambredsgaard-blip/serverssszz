@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.5.3  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
+--  Universal Hub v3.5.4  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -55,7 +55,6 @@ local function tw(o,info,props) local t=TweenService:Create(o,info,props); t:Pla
 local QI = TweenInfo.new(0.15, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
--- Safe wrappers for task.spawn / task.wait (some mobile executors lack task lib)
 local spawnTask = (task and task.spawn) or (coroutine and function(fn, ...) coroutine.wrap(fn)(...) end) or function(fn, ...) fn(...) end
 local waitTask  = (task and task.wait) or wait
 
@@ -70,7 +69,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.3",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.4",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -498,42 +497,38 @@ Section(gamesTab, "Game Scripts")
 
 local ddgLoading = false
 Button(gamesTab, "Duck Duck (TAG) Script", function()
-    -- This is step 1 — if you don't see this in F9, the click handler is broken.
-    warn("[Games] 1. Button clicked")
+    warn("[Games] 1. DDG button clicked")
 
     if ddgLoading then
-        warn("[Games] already loading — ignoring")
+        warn("[Games] DDG already loading — ignoring")
         return
     end
     ddgLoading = true
 
     spawnTask(function()
-        warn("[Games] 2. Async task started")
-
         local ok, err = pcall(function()
             local url = RELAY_HTTP .. "/ddg.lua"
-            warn("[Games] 3. Fetching: " .. url)
+            warn("[Games] 2. Fetching DDG: " .. url)
 
             local src = fetchUrl(url)
             if not src or src == "" then
-                error("Empty response from " .. url .. " (HttpGet + request both failed)")
+                error("Empty response from " .. url)
             end
-            warn("[Games] 4. Got " .. tostring(#src) .. " bytes")
+            warn("[Games] 3. Got " .. tostring(#src) .. " bytes")
 
             local compiler = loadstring or load
             if not compiler then
                 error("No loadstring/load available in this executor")
             end
 
-            warn("[Games] 5. Compiling...")
             local fn = compiler(src)
             if not fn then
                 error("Compilation failed — loadstring returned nil")
             end
 
-            warn("[Games] 6. Executing DDG script...")
+            warn("[Games] 4. Executing DDG...")
             fn()
-            warn("[Games] 7. DDG script finished executing")
+            warn("[Games] 5. DDG finished")
         end)
 
         ddgLoading = false
@@ -547,15 +542,64 @@ Button(gamesTab, "Duck Duck (TAG) Script", function()
         end
     end)
 
-    -- Notify last so a notify error can't kill the async task spawn above
     pcall(function() notify("Games", "Loading Duck Duck Goose script...", T.Accent) end)
+end)
+
+local mm2Loading = false
+Button(gamesTab, "MM2 Script", function()
+    warn("[Games] 1. MM2 button clicked")
+
+    if mm2Loading then
+        warn("[Games] MM2 already loading — ignoring")
+        return
+    end
+    mm2Loading = true
+
+    spawnTask(function()
+        local ok, err = pcall(function()
+            local url = RELAY_HTTP .. "/mm2.lua"
+            warn("[Games] 2. Fetching MM2: " .. url)
+
+            local src = fetchUrl(url)
+            if not src or src == "" then
+                error("Empty response from " .. url)
+            end
+            warn("[Games] 3. Got " .. tostring(#src) .. " bytes")
+
+            local compiler = loadstring or load
+            if not compiler then
+                error("No loadstring/load available in this executor")
+            end
+
+            local fn = compiler(src)
+            if not fn then
+                error("Compilation failed — loadstring returned nil")
+            end
+
+            warn("[Games] 4. Executing MM2...")
+            fn()
+            warn("[Games] 5. MM2 finished")
+        end)
+
+        mm2Loading = false
+
+        if ok then
+            warn("[Games] MM2 loaded successfully")
+            pcall(function() notify("Games", "MM2 script loaded!", T.Good) end)
+        else
+            warn("[Games] MM2 failed: " .. tostring(err))
+            pcall(function() notify("Games", "Failed: " .. tostring(err), T.Bad) end)
+        end
+    end)
+
+    pcall(function() notify("Games", "Loading MM2 script...", T.Accent) end)
 end)
 
 Section(gamesTab, "Info")
 C("TextLabel",{
-    BackgroundTransparency=1, Size=UDim2.new(1,0,0,80),
+    BackgroundTransparency=1, Size=UDim2.new(1,0,0,110),
     Font=Enum.Font.Gotham,
-    Text="Loads standalone game-specific hubs.\n\nDuck Duck Goose Hub v4.3 opens its own Rayfield window once loaded.",
+    Text="Loads standalone game-specific hubs.\n\n• Duck Duck Goose Hub v4.3\n• MM2 Hub (Mm2 Hub) — Murder Mystery 2 script\n\nEach opens its own separate window once loaded.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=gamesTab,
@@ -649,9 +693,9 @@ C("TextLabel",{
 -- ── About ──
 Section(aboutTab, "Info")
 C("TextLabel",{
-    BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
+    BackgroundTransparency=1, Size=UDim2.new(1,0,0,70),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.5.3\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
+    Text="Universal Hub v3.5.4\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
