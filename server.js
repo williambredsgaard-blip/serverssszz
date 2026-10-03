@@ -1,5 +1,6 @@
 const express = require("express");
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
@@ -41,6 +42,85 @@ function bumpExecutions() {
 
 process.on("SIGINT", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
 process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
+
+// ─── Roblox thumbnail proxy (with cache) ───
+// Uses the modern thumbnails.roblox.com API — same one that
+// Players:GetUserThumbnailAsync resolves to under the hood.
+const thumbCache = new Map();          // userId -> { url, at }
+const THUMB_TTL   = 60 * 60 * 1000;    // 1 hour success cache
+const THUMB_NEG_TTL = 60 * 1000;       // 1 min negative cache (not-ready)
+
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, (resp) => {
+      let raw = "";
+      resp.on("data", (chunk) => { raw += chunk; });
+      resp.on("end", () => {
+        try { resolve(JSON.parse(raw)); }
+        catch (e) { reject(new Error("bad json: " + raw.slice(0, 120))); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(8000, () => req.destroy(new Error("timeout")));
+  });
+}
+
+async function getThumbnails(userIds) {
+  const now = Date.now();
+  const result = {};
+  const missing = [];
+
+  for (const id of userIds) {
+    const c = thumbCache.get(id);
+    if (c) {
+      const ttl = c.url ? THUMB_TTL : THUMB_NEG_TTL;
+      if (now - c.at < ttl) {
+        result[id] = c.url;   // may be null for negative cache
+        continue;
+      }
+    }
+    missing.push(id);
+  }
+
+  if (missing.length === 0) return result;
+
+  // Roblox allows up to 100 ids per request
+  const chunk = missing.slice(0, 100);
+  try {
+    const data = await fetchJson(
+      "https://thumbnails.roblox.com/v1/users/avatar-headshot" +
+      "?userIds=" + chunk.join(",") +
+      "&size=150x150&format=Png&isCircular=false"
+    );
+    if (data && Array.isArray(data.data)) {
+      const seen = new Set();
+      for (const entry of data.data) {
+        const uid = entry.targetId;
+        seen.add(uid);
+        if (entry.state === "Completed" && entry.imageUrl) {
+          result[uid] = entry.imageUrl;
+          thumbCache.set(uid, { url: entry.imageUrl, at: now });
+        } else {
+          // Pending or unavailable — cache negative for 1 min
+          result[uid] = null;
+          thumbCache.set(uid, { url: null, at: now });
+        }
+      }
+      // Any id the API didn't mention at all — mark negative
+      for (const uid of chunk) {
+        if (!seen.has(uid)) {
+          result[uid] = null;
+          thumbCache.set(uid, { url: null, at: now });
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[thumbnails] fetch failed:", e.message);
+    for (const uid of chunk) if (result[uid] === undefined) result[uid] = null;
+  }
+
+  return result;
+}
 
 // Where to look for .lua files
 const LUA_SEARCH_PATHS = [
@@ -191,6 +271,14 @@ app.post("/stats/reset", (req, res) => {
   res.json({ ok: true, count: 0 });
 });
 
+// ─── Standalone thumbnail endpoint (optional, useful for debugging) ───
+app.get("/thumbnail", async (req, res) => {
+  const uid = parseInt(req.query.userId);
+  if (!uid) return res.status(400).json({ ok: false, error: "missing userId" });
+  const map = await getThumbnails([uid]);
+  res.json({ ok: !!map[uid], url: map[uid] || null });
+});
+
 setInterval(() => {
   const now = Date.now();
   for (const [uid, entry] of httpClients) {
@@ -242,7 +330,24 @@ app.get("/files", (req, res) => {
   res.json({ searchPaths: LUA_SEARCH_PATHS, files: found, cwd: process.cwd(), dirname: __dirname });
 });
 
-app.get("/clients", (req, res) => res.json({ users: userListPayload(), executions: stats.executions }));
+// ─── Clients list (now with real thumbnails) ───
+app.get("/clients", async (req, res) => {
+  const users = userListPayload();
+  const ids = users.map(u => u.userId).filter(Boolean);
+
+  let thumbs = {};
+  if (ids.length > 0) {
+    try { thumbs = await getThumbnails(ids); }
+    catch (e) { console.error("[clients] thumb fetch error:", e.message); }
+  }
+
+  const enriched = users.map(u => ({
+    ...u,
+    thumbnail: thumbs[u.userId] || null,
+  }));
+
+  res.json({ users: enriched, executions: stats.executions });
+});
 
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
@@ -311,7 +416,7 @@ app.get("/", (req, res) => {
   }
   .card:hover{transform:translateY(-2px);border-color:rgba(120,90,255,0.6);background:rgba(34,34,42,0.75)}
   .av{width:56px;height:56px;border-radius:10px;background:#2a2a34;flex-shrink:0;
-    border:1px solid rgba(120,90,255,0.25)}
+    border:1px solid rgba(120,90,255,0.25);object-fit:cover;display:block}
   .meta{min-width:0;flex:1}
   .name{font-weight:600;color:#fff;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .game{color:#9a9aaa;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -345,6 +450,14 @@ app.get("/", (req, res) => {
   </div>
 
 <script>
+// Nice inline SVG placeholder — matches the theme, no broken-image icon
+const FALLBACK_THUMB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">' +
+  '<rect width="56" height="56" rx="10" fill="#2a2a34"/>' +
+  '<text x="28" y="37" font-family="sans-serif" font-size="24" font-weight="600" ' +
+  'fill="#8a8a9a" text-anchor="middle">?</text></svg>'
+);
+
 (function(){
   const canvas = document.getElementById('bg');
   const ctx = canvas.getContext('2d');
@@ -419,13 +532,14 @@ async function refresh() {
     }
     grid.innerHTML = users.map(u => {
       const uid = u.userId;
-      const thumb = 'https://www.roblox.com/headshot-thumbnail/image?userId=' + uid + '&width=100&height=100&format=png';
+      const thumb = u.thumbnail || FALLBACK_THUMB;
       const badge = u.transport === 'ws' ? '<span class="badge ws">ws</span>' : '<span class="badge http">http</span>';
       const place = u.placeId ? ('Place ' + u.placeId) : 'Unknown';
+      const safeName = (u.displayName || ('User ' + uid)).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
       return '<div class="card">' +
-        '<img class="av" src="' + thumb + '" onerror="this.style.background=\\'#2a2a34\\'">' +
+        '<img class="av" src="' + thumb + '" alt="" onerror="this.src=\\'' + FALLBACK_THUMB + '\\'">' +
         '<div class="meta">' +
-          '<div class="name">' + (u.displayName || ('User ' + uid)) + '</div>' +
+          '<div class="name">' + safeName + '</div>' +
           '<div class="game">' + place + '</div>' +
           badge +
         '</div></div>';
