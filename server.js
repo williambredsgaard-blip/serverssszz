@@ -342,7 +342,7 @@ app.get("/clients", async (req, res) => {
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Delta Hub Dashboard</title>
+<html><head><meta charset="utf-8"><title>Script Hub Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <!-- Google AdSense -->
@@ -441,7 +441,6 @@ app.get("/", (req, res) => {
   .empty{color:#666;padding:60px 20px;text-align:center;grid-column:1/-1;
     background:rgba(28,28,34,0.4);border:1px dashed rgba(70,70,82,0.5);border-radius:12px}
 
-  /* ── Ad slot styling ── */
   .ad-wrap{
     max-width:1200px;margin-top:24px;padding:14px;
     background:rgba(28,28,34,0.4);
@@ -480,7 +479,7 @@ app.get("/", (req, res) => {
             onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
         </a>
         <div class="title-block">
-          <h1>Delta Hub Dashboard</h1>
+          <h1>Script Hub Dashboard</h1>
           <div class="sub">Live view of every client running the hub script</div>
         </div>
       </div>
@@ -491,7 +490,6 @@ app.get("/", (req, res) => {
     </div>
     <div class="grid" id="grid"><div class="empty">Loading...</div></div>
 
-    <!-- Ad slot below the clients grid -->
     <div class="ad-wrap">
       <div class="ad-label">Advertisement</div>
       <ins class="adsbygoogle"
