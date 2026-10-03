@@ -1022,6 +1022,8 @@ app.get("/scripts", (req, res) => {
       <div class="h1">Browse Scripts</div>
       <p class="sub">Every script we've verified. Click one to see the loader and copy it into your executor.</p>
     </div>
+    
+    <!-- Vertical Upward Ad -->
     <div class="ad-container">
       <ins class="adsbygoogle"
            style="display:block"
@@ -1030,10 +1032,11 @@ app.get("/scripts", (req, res) => {
            data-ad-format="auto"
            data-full-width-responsive="true"></ins>
     </div>
-    ${empty || `<div class="scripts-grid">${cards}</div>`}
     <script>
       try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e){}
     </script>
+
+    ${empty || `<div class="scripts-grid">${cards}</div>`}
   `, SCRIPTS_LIST_CSS);
   res.set("Content-Type", "text/html").send(html);
 });
@@ -1625,6 +1628,7 @@ app.get("/script/:slug", (req, res) => {
       </div>
     </div>
 
+    <!-- Vertical Upward Ad -->
     <div class="ad-container">
       <ins class="adsbygoogle"
            style="display:block"
@@ -1633,6 +1637,9 @@ app.get("/script/:slug", (req, res) => {
            data-ad-format="auto"
            data-full-width-responsive="true"></ins>
     </div>
+    <script>
+      try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e){}
+    </script>
 
     <div class="script-tabs">
       <button class="script-tab active" data-tab="overview">Overview</button>
