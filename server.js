@@ -62,6 +62,11 @@ function tagIcon(tag) {
   return "";
 }
 
+// ─── AVATAR HELPERS (FIXED: always purple→blue gradient, never random) ───
+const AVATAR_BG = "linear-gradient(135deg,#7850ff,#2f8fff)";
+// Kept for backwards compat in case any code still calls it — always returns the same hex.
+function pickAvatarColor() { return "#7850ff"; }
+
 // ─── SCRIPTS REGISTRY ───
 const SCRIPTS = [
   {
@@ -161,7 +166,6 @@ function normalizeForSwear(raw) {
 }
 
 const SWEAR_PATTERNS = [
-  // ── English ──
   /\bf+u+c+k/i, /\bfck/i, /\bfuq/i, /\bfux\b/i,
   /\bsh+i+t/i, /\bshyt/i,
   /\bb+i+t+c+h/i, /\bbtch/i, /\bbiatch/i,
@@ -180,7 +184,6 @@ const SWEAR_PATTERNS = [
   /jackass/i,
   /\bcum\b/i, /jizz/i, /wank/i, /wanker/i,
   /\btits\b/i, /\bboobs\b/i, /\bpenis\b/i, /\bvagina\b/i, /\bdildo\b/i,
-  // ── Russian (Cyrillic) ──
   /хуй/i, /хуя/i, /хую/i, /хуё/i, /хуи/i, /хуе/i,
   /пизд/i, /пизж/i,
   /бляд/i, /блят/i, /бляц/i,
@@ -197,7 +200,6 @@ const SWEAR_PATTERNS = [
   /хер\b/i, /херн/i,
   /манда/i,
   /жоп/i, /сперм/i, /дроч/i,
-  // ── Transliterated Russian ──
   /xuy/i, /xuj/i, /huy/i, /hui/i, /hyi/i,
   /pizd/i, /pizdec/i,
   /blyad/i, /blyat/i,
@@ -683,12 +685,6 @@ app.get("/ads.txt", (req, res) => {
 //  SOCIAL / STATS API
 // ═══════════════════════════════════════════════════════════════
 function sanitizeText(s) { return String(s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
-function pickAvatarColor(name) {
-  const palette = ["#4a7cf0","#7c5cff","#e8665a","#3aa663","#e6a63a","#20b8b0","#c94fc9","#e05c9b","#5b9ae0"];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return palette[Math.abs(h) % palette.length];
-}
 
 app.get("/api/script/:slug/stats", (req, res) => {
   const s = findScript(req.params.slug);
@@ -879,8 +875,7 @@ const SCRIPTS_LIST_CSS = `
   .script-card-title{font-size:15px;font-weight:700;color:#fff;line-height:1.35;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:40px}
   .script-card-author{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#9a9aaa}
   .script-card-author-icon{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;flex-shrink:0;overflow:hidden}
-  .script-card-author-name{color:#c9c9d2;font-weight:600;text-decoration:none}
-  .script-card-author-name:hover{color:#fff}
+  .script-card-author-name{color:#c9c9d2;font-weight:600}
   .script-card-author .verified{color:#4f9bff;display:inline-flex;align-items:center}
   .script-card-author .sep{color:#555562}
   @media (max-width:520px){
@@ -893,22 +888,23 @@ app.get("/scripts", (req, res) => {
   const cards = SCRIPTS.map(s => {
     const st = getScriptStats(s.slug);
     const primary = s.primaryTag || (s.tags && s.tags[0]) || "";
+    // FIX: author name is now a <span>, NOT a nested <a>, because the whole card is already an <a>.
     return `
     <a href="/script/${s.slug}" class="script-card">
       <div class="script-card-thumb">
-        <img src="${s.thumbnail}" alt="${s.name}" loading="lazy" onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#1a1a24,#2a2a3a)'">
+        <img src="${s.thumbnail}" alt="${sanitizeText(s.name)}" loading="lazy" onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#1a1a24,#2a2a3a)'">
         <div class="script-card-stats">
           <span>${ICONS.eye(14)} ${fmtCount(st.views)}</span>
           <span>${ICONS.bolt(14)} ${fmtCount(st.likes)}</span>
         </div>
-        <div class="script-card-posted">${s.posted}</div>
-        ${primary ? `<div class="script-card-primary">${tagIcon(primary)}${primary}</div>` : ''}
+        <div class="script-card-posted">${sanitizeText(s.posted)}</div>
+        ${primary ? `<div class="script-card-primary">${tagIcon(primary)}${sanitizeText(primary)}</div>` : ''}
       </div>
       <div class="script-card-body">
         <div class="script-card-title">${sanitizeText(s.name)}</div>
         <div class="script-card-author">
-          <span class="script-card-author-icon" style="background:${pickAvatarColor(s.author)}">${sanitizeText(s.author.substring(0,1).toUpperCase())}</span>
-          <a href="/user/${encodeURIComponent(s.author)}" class="script-card-author-name">${sanitizeText(s.author)}</a>
+          <span class="script-card-author-icon">${sanitizeText(s.author.substring(0,1).toUpperCase())}</span>
+          <span class="script-card-author-name">${sanitizeText(s.author)}</span>
           ${s.authorTag ? `<span class="verified">${ICONS.verified(13)}</span>` : ''}
           <span class="sep">·</span>
           <span>${sanitizeText(s.game)}</span>
@@ -956,7 +952,6 @@ app.get("/script/:slug", (req, res) => {
   }).join("");
 
   const commentCount = getComments(s.slug).length;
-  const authorColor = pickAvatarColor(s.author);
   const authorUser = getUser(s.author);
 
   const detailCss = `
@@ -971,7 +966,8 @@ app.get("/script/:slug", (req, res) => {
     .script-detail-title{font-size:26px;font-weight:800;color:#fff;line-height:1.22;margin:0 0 8px;letter-spacing:-0.3px}
     .script-detail-sub{color:#8a8a9a;font-size:14px;margin-bottom:16px}
     .script-detail-author{display:flex;align-items:center;gap:11px;margin-bottom:18px;flex-wrap:wrap}
-    .script-detail-author-icon{width:42px;height:42px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;flex-shrink:0;text-decoration:none}
+    /* FIX: gradient moved into CSS so no inline random color is used anymore */
+    .script-detail-author-icon{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#7850ff,#2f8fff);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;flex-shrink:0;text-decoration:none}
     .script-detail-author-text{min-width:0}
     .script-detail-author-name{font-weight:700;color:#fff;font-size:15px;display:flex;align-items:center;gap:6px;line-height:1.2;text-decoration:none}
     .script-detail-author-name:hover{color:#b9a3ff}
@@ -1046,7 +1042,8 @@ app.get("/script/:slug", (req, res) => {
     .comment-empty{color:#6a6a7a;font-size:13.5px;text-align:center;padding:26px 0}
     .comment-item{display:flex;gap:14px;padding-bottom:22px;border-bottom:1px solid rgba(60,60,72,0.35)}
     .comment-item:last-child{border-bottom:none;padding-bottom:0}
-    .comment-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;flex-shrink:0;text-decoration:none;transition:transform .15s}
+    /* FIX: gradient moved into CSS, no more random inline color */
+    .comment-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;flex-shrink:0;text-decoration:none;transition:transform .15s}
     .comment-avatar:hover{transform:scale(1.05)}
     .comment-body{flex:1;min-width:0}
     .comment-header{display:flex;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap}
@@ -1094,8 +1091,15 @@ app.get("/script/:slug", (req, res) => {
     (function(){
       const SLUG = ${JSON.stringify(s.slug)};
       const AUTHOR = ${JSON.stringify(s.author)};
-      const AUTHOR_COLOR = ${JSON.stringify(authorColor)};
       const INITIAL_COMMENTS = ${initialCommentsJson};
+
+      // client-side number formatter to keep view/vote counts consistent with server fmtCount()
+      function fmtCount(n) {
+        n = Number(n) || 0;
+        if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\\.0$/,"") + "M";
+        if (n >= 1000)    return (n/1000).toFixed(1).replace(/\\.0$/,"") + "K";
+        return String(n);
+      }
 
       function getDeviceId() {
         try {
@@ -1167,12 +1171,11 @@ app.get("/script/:slug", (req, res) => {
       function setVoteState(state) {
         upBtn.classList.toggle('active', state.liked);
         downBtn.classList.toggle('active', state.disliked);
-        statLikes.textContent = state.likes;
-        statDislikes.textContent = state.dislikes;
+        // FIX: use fmtCount consistently everywhere
+        statLikes.textContent = fmtCount(state.likes);
+        statDislikes.textContent = fmtCount(state.dislikes);
         const bThumb = document.getElementById('thumbLikes');
-        const bThumbIn = document.getElementById('thumbLikesInline');
-        if (bThumb) bThumb.textContent = state.likes;
-        if (bThumbIn) bThumbIn.textContent = state.likes;
+        if (bThumb) bThumb.textContent = fmtCount(state.likes);
       }
       async function vote(v) {
         try {
@@ -1230,29 +1233,13 @@ app.get("/script/:slug", (req, res) => {
       const emojiPanel = document.getElementById('emojiPanel');
       const composerAvatar = document.getElementById('composerAvatar');
 
+      // FIX: composer avatar now uses only the fixed gradient; just set the letter.
       function updateComposerAvatar() {
         const u = getUsername() || 'You';
-        const letter = u.substring(0,1).toUpperCase();
-        composerAvatar.textContent = letter;
-        const color = avatarColor(u);
-        composerAvatar.style.background = 'linear-gradient(135deg,' + color + ',' + shadeColor(color, -20) + ')';
+        composerAvatar.textContent = u.substring(0,1).toUpperCase();
       }
       updateComposerAvatar();
 
-      function avatarColor(name) {
-        const palette = ["#4a7cf0","#7c5cff","#e8665a","#3aa663","#e6a63a","#20b8b0","#c94fc9","#e05c9b","#5b9ae0"];
-        let h = 0;
-        for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-        return palette[Math.abs(h) % palette.length];
-      }
-      function shadeColor(hex, pct) {
-        const n = parseInt(hex.slice(1), 16);
-        let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-        r = Math.max(0, Math.min(255, r + Math.round(255 * pct / 100)));
-        g = Math.max(0, Math.min(255, g + Math.round(255 * pct / 100)));
-        b = Math.max(0, Math.min(255, b + Math.round(255 * pct / 100)));
-        return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
-      }
       function escapeHtml(s) {
         return String(s).replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
       }
@@ -1268,12 +1255,13 @@ app.get("/script/:slug", (req, res) => {
       }
 
       function renderComment(c) {
-        const color = avatarColor(c.username);
         const initial = c.username.substring(0,1).toUpperCase();
         const liked = c.likedBy && c.likedBy[DEVICE] ? ' active-like' : '';
         const disliked = c.dislikedBy && c.dislikedBy[DEVICE] ? ' active-dislike' : '';
+        // FIX: no inline background; CSS class owns the fixed gradient.
+        // FIX: removed the confusing "Reply → /user/..." link.
         return \`<div class="comment-item" data-id="\${escapeHtml(c.id)}">
-          <a class="comment-avatar" href="/user/\${encodeURIComponent(c.username)}" style="background:linear-gradient(135deg,\${color},\${shadeColor(color,-20)})">\${escapeHtml(initial)}</a>
+          <a class="comment-avatar" href="/user/\${encodeURIComponent(c.username)}">\${escapeHtml(initial)}</a>
           <div class="comment-body">
             <div class="comment-header">
               <a class="comment-username" href="/user/\${encodeURIComponent(c.username)}">\${escapeHtml(c.username)}</a>
@@ -1284,7 +1272,7 @@ app.get("/script/:slug", (req, res) => {
             <div class="comment-actions">
               <button class="comment-action comment-like\${liked}" data-id="\${escapeHtml(c.id)}" data-vote="like" title="Like">${ICONS.thumbUp(14)}<span class="comment-action-count">\${c.likes || 0}</span></button>
               <button class="comment-action comment-dislike\${disliked}" data-id="\${escapeHtml(c.id)}" data-vote="dislike" title="Dislike">${ICONS.thumbDown(14)}<span class="comment-action-count">\${c.dislikes || 0}</span></button>
-              <a class="comment-action" href="/user/\${encodeURIComponent(c.username)}" title="View profile">${ICONS.user(14)}<span>Reply</span></a>
+              <a class="comment-action" href="/user/\${encodeURIComponent(c.username)}" title="View profile">${ICONS.user(14)}<span>Profile</span></a>
               <button class="comment-action" title="More" onclick="return false">${ICONS.more(16)}</button>
             </div>
           </div>
@@ -1387,10 +1375,8 @@ app.get("/script/:slug", (req, res) => {
           }
           textarea.value = '';
           updateTextareaState();
-          const list = [d.comment, ...(Array.isArray(INITIAL_COMMENTS) ? INITIAL_COMMENTS : [])];
           INITIAL_COMMENTS.unshift(d.comment);
           renderAll(INITIAL_COMMENTS);
-          // Update tab count
           const countEl = document.getElementById('commentTabCount');
           if (countEl) countEl.textContent = INITIAL_COMMENTS.length;
         } catch (e) {
@@ -1452,7 +1438,7 @@ app.get("/script/:slug", (req, res) => {
         <div class="script-detail-sub">${sanitizeText(s.subtitle)}</div>
 
         <div class="script-detail-author">
-          <a class="script-detail-author-icon" href="/user/${encodeURIComponent(s.author)}" style="background:linear-gradient(135deg,${authorColor},${authorColor})">${sanitizeText(s.author.substring(0,1).toUpperCase())}</a>
+          <a class="script-detail-author-icon" href="/user/${encodeURIComponent(s.author)}">${sanitizeText(s.author.substring(0,1).toUpperCase())}</a>
           <div class="script-detail-author-text">
             <a class="script-detail-author-name" href="/user/${encodeURIComponent(s.author)}">${sanitizeText(s.author)} ${s.authorTag ? `<span class="verified">${ICONS.verified(14)}</span>` : ''}</a>
             <div class="script-detail-author-sub">${sanitizeText(s.posted)} · ${sanitizeText(s.game)} · ${authorUser.followers.length} follower${authorUser.followers.length === 1 ? '' : 's'}</div>
@@ -1469,9 +1455,9 @@ app.get("/script/:slug", (req, res) => {
 
         <div class="script-detail-actions">
           <div class="script-detail-vote">
-            <button class="up" id="scriptUpBtn">${ICONS.thumbUp(15)} <span id="statLikes">${st.likes}</span></button>
+            <button class="up" id="scriptUpBtn">${ICONS.thumbUp(15)} <span id="statLikes">${fmtCount(st.likes)}</span></button>
             <div class="divider"></div>
-            <button class="down" id="scriptDownBtn">${ICONS.thumbDown(15)} <span id="statDislikes">${st.dislikes}</span></button>
+            <button class="down" id="scriptDownBtn">${ICONS.thumbDown(15)} <span id="statDislikes">${fmtCount(st.dislikes)}</span></button>
           </div>
           <button class="script-detail-action">${ICONS.star(15)} Save</button>
           <button class="script-detail-action">${ICONS.share(15)} Share</button>
@@ -1542,13 +1528,9 @@ app.get("/script/:slug", (req, res) => {
 app.get("/user/:username", (req, res) => {
   const name = String(req.params.username || "").trim();
   const u = social.users[name];
-  const isSelf = false;
-
   const user = u || { createdAt: Date.now(), followers: [], following: [] };
-  const color = pickAvatarColor(name);
   const initial = name.substring(0,1).toUpperCase();
 
-  // gather comments
   const userComments = [];
   for (const slug of Object.keys(social.comments)) {
     const s = findScript(slug);
@@ -1568,7 +1550,7 @@ app.get("/user/:username", (req, res) => {
     ? `<div class="comment-empty">This user hasn't posted any comments yet.</div>`
     : userComments.map(({ scriptSlug, scriptName, comment }) => `
       <div class="comment-item">
-        <a class="comment-avatar" href="/user/${encodeURIComponent(name)}" style="background:linear-gradient(135deg,${color},${color})">${sanitizeText(initial)}</a>
+        <a class="comment-avatar" href="/user/${encodeURIComponent(name)}">${sanitizeText(initial)}</a>
         <div class="comment-body">
           <div class="comment-header">
             <a class="comment-username" href="/user/${encodeURIComponent(name)}">${sanitizeText(name)}</a>
@@ -1582,7 +1564,8 @@ app.get("/user/:username", (req, res) => {
 
   const profileCss = `
     .profile-card{background:rgba(24,24,30,0.72);border:1px solid rgba(60,60,72,0.55);border-radius:16px;padding:26px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-bottom:26px}
-    .profile-avatar{width:82px;height:82px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:32px;flex-shrink:0;box-shadow:0 10px 24px rgba(0,0,0,0.35)}
+    /* FIX: gradient moved into CSS, no random inline color */
+    .profile-avatar{width:82px;height:82px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:32px;flex-shrink:0;box-shadow:0 10px 24px rgba(0,0,0,0.35)}
     .profile-info{flex:1;min-width:220px}
     .profile-name{font-size:24px;font-weight:800;color:#fff;margin:0 0 4px;letter-spacing:-0.3px}
     .profile-meta{color:#8a8a9a;font-size:13px;margin-bottom:12px}
@@ -1600,7 +1583,7 @@ app.get("/user/:username", (req, res) => {
     .profile-list{background:rgba(24,24,30,0.55);border:1px solid rgba(60,60,72,0.5);border-radius:14px;padding:22px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
     .comment-item{display:flex;gap:14px;padding-bottom:22px;border-bottom:1px solid rgba(60,60,72,0.35);margin-bottom:22px}
     .comment-item:last-child{border-bottom:none;padding-bottom:0;margin-bottom:0}
-    .comment-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;flex-shrink:0;text-decoration:none}
+    .comment-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7850ff,#2f8fff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;flex-shrink:0;text-decoration:none}
     .comment-body{flex:1;min-width:0}
     .comment-header{display:flex;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap}
     .comment-username{color:#fff;font-weight:700;font-size:14px;text-decoration:none}
@@ -1658,7 +1641,7 @@ app.get("/user/:username", (req, res) => {
     <a href="/scripts" class="script-detail-back" style="display:inline-flex;align-items:center;gap:6px;color:#8a8a9a;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:18px">${ICONS.arrowLeft(15)} Back to Scripts</a>
 
     <div class="profile-card">
-      <div class="profile-avatar" style="background:linear-gradient(135deg,${color},${color})">${sanitizeText(initial)}</div>
+      <div class="profile-avatar">${sanitizeText(initial)}</div>
       <div class="profile-info">
         <div class="profile-name">${sanitizeText(name)}</div>
         <div class="profile-meta">Joined ${sanitizeText(joinedStr)}</div>
@@ -2115,7 +2098,6 @@ app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
   const totalLikes = SCRIPTS.reduce((a, s) => a + getScriptStats(s.slug).likes, 0);
   const totalViews = SCRIPTS.reduce((a, s) => a + getScriptStats(s.slug).views, 0);
-  const totalComments = Object.values(social.comments).reduce((a, arr) => a + (arr ? arr.length : 0), 0);
 
   res.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Roblox Script Hub Dashboard</title>
