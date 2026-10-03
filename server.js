@@ -17,7 +17,7 @@ const httpClients = new Map();
 const STALE_MS = 5_000;
 
 // ─── CONFIG — EDIT THESE ───
-const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY || "WFrvF5JttOXu8hhZnFgnivjkhWE7qbEaFWGRFhbewJs";
+const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY || "YOUR_BLOCKONOMICS_API_KEY";
 const PRODUCT_PRICE_USD = 0.87;
 const PRODUCT_NAME = "CS2 Prime Account";
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
