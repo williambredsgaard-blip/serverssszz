@@ -87,7 +87,7 @@ const SCRIPTS = [
     name: "Infinite Yield",
     game: "Universal",
     subtitle: "Universal Admin Commands & Utilities",
-    description: "Infinite Yield is one of the most widely used admin command scripts for Roblox. It ships with a full command bar, ESP, fly, teleport, waypoints, chat tools, exploits, and hundreds of utility commands. Works across almost every game out of the box and needs no key.",
+    description: "Infinite Yield is one of the most widely used admin command scripts for Roblox. It ships with a full command bar, ESP, fly, teleport, waypoints, chat tools, and hundreds of utility commands. Works across almost every game out of the box and needs no key.",
     author: "Edge",
     authorTag: "#1",
     tags: ["Keyless", "Mobile friendly", "Universal"],
@@ -124,7 +124,11 @@ function saveSocial() {
   if (socialSaveTimer) return;
   socialSaveTimer = setTimeout(() => {
     socialSaveTimer = null;
-    try { fs.writeFileSync(SOCIAL_FILE, JSON.stringify(social, null, 2)); } catch (e) { console.error("[social] save error:", e.message); }
+    try { 
+      fs.writeFileSync(SOCIAL_FILE, JSON.stringify(social, null, 2)); 
+    } catch (e) { 
+      console.error("[social] save error:", e.message); 
+    }
   }, 300);
 }
 
@@ -636,7 +640,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   .topnav-icons a.discord:hover{background:rgba(88,101,242,0.28);border-color:rgba(88,101,242,0.8);box-shadow:0 10px 24px rgba(88,101,242,0.35)}
   .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
   .topnav-icons a.steam:hover{background:rgba(27,40,56,0.85);border-color:rgba(103,150,200,0.8);box-shadow:0 10px 24px rgba(103,150,200,0.3)}
-  .topnav-icons img{width:28px;height:28px;display:block;border-radius:6px;object-fit:contain}
+  .topnav-icons img{width:34px;height:34px;display:block;border-radius:6px;object-fit:contain}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto}
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s;position:relative}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
@@ -780,6 +784,7 @@ app.post("/api/script/:slug/view", (req, res) => {
   const st = getScriptStats(s.slug);
   st.views += 1;
   saveSocial();
+  console.log(`[view] ${s.slug} incremented to ${st.views}`);
   res.json({ ok: true, views: st.views });
 });
 
@@ -973,6 +978,7 @@ const SCRIPTS_LIST_CSS = `
   .script-card-author-name{color:#c9c9d2;font-weight:600}
   .script-card-author .verified{color:#4f9bff;display:inline-flex;align-items:center}
   .script-card-author .sep{color:#555562}
+  .ad-container{width:100%;margin:20px auto;padding:10px;background:rgba(28,28,34,0.5);border:1px solid rgba(90,90,105,0.5);border-radius:14px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;overflow:hidden}
   @media (max-width:520px){
     .scripts-grid{grid-template-columns:1fr;gap:12px}
     .script-card-title{font-size:14px;min-height:auto}
@@ -1016,7 +1022,18 @@ app.get("/scripts", (req, res) => {
       <div class="h1">Browse Scripts</div>
       <p class="sub">Every script we've verified. Click one to see the loader and copy it into your executor.</p>
     </div>
+    <div class="ad-container">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="${ADSENSE_CLIENT}"
+           data-ad-slot="1135972285"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+    </div>
     ${empty || `<div class="scripts-grid">${cards}</div>`}
+    <script>
+      try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e){}
+    </script>
   `, SCRIPTS_LIST_CSS);
   res.set("Content-Type", "text/html").send(html);
 });
@@ -1167,6 +1184,8 @@ app.get("/script/:slug", (req, res) => {
     .uname-btn.primary{background:linear-gradient(135deg,#4a7cf0,#3b5fd9);border-color:transparent;color:#fff;box-shadow:0 8px 20px rgba(74,124,240,0.35)}
     .uname-btn.primary:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(74,124,240,0.5)}
 
+    .ad-container{width:100%;margin:20px auto;padding:10px;background:rgba(28,28,34,0.5);border:1px solid rgba(90,90,105,0.5);border-radius:14px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+
     @media (max-width:760px){
       .script-detail-hero{grid-template-columns:1fr;gap:18px}
       .script-detail-title{font-size:20px}
@@ -1204,15 +1223,20 @@ app.get("/script/:slug", (req, res) => {
         panels.forEach(p => p.classList.toggle('active', p.dataset.panel === t));
       }));
 
-      // ── View counter (once per session) ──
+      // ── View counter ──
       (function(){
         try {
-          const key = 'hub_viewed_' + SLUG;
-          if (!sessionStorage.getItem(key)) {
-            sessionStorage.setItem(key, '1');
-            fetch('/api/script/' + SLUG + '/view', { method: 'POST' }).catch(() => {});
-          }
-        } catch (e) { fetch('/api/script/' + SLUG + '/view', { method: 'POST' }).catch(() => {}); }
+          fetch('/api/script/' + SLUG + '/view?t=' + Date.now(), { method: 'POST', cache: 'no-store' })
+            .then(r => r.json())
+            .then(d => {
+              if (d.ok) {
+                const statViews = document.getElementById('statViews');
+                if (statViews) statViews.textContent = fmtCount(d.views);
+              }
+            }).catch(() => {});
+        } catch (e) { 
+          fetch('/api/script/' + SLUG + '/view?t=' + Date.now(), { method: 'POST' }).catch(() => {}); 
+        }
       })();
 
       // ── Copy script loader ──
@@ -1601,6 +1625,15 @@ app.get("/script/:slug", (req, res) => {
       </div>
     </div>
 
+    <div class="ad-container">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="${ADSENSE_CLIENT}"
+           data-ad-slot="1135972285"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+    </div>
+
     <div class="script-tabs">
       <button class="script-tab active" data-tab="overview">Overview</button>
       <button class="script-tab" data-tab="getscript">Get script</button>
@@ -1650,6 +1683,9 @@ app.get("/script/:slug", (req, res) => {
         </div>
       </div>
     </div>
+    <script>
+      try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e){}
+    </script>
   `, detailCss, detailJs);
 
   res.set("Content-Type", "text/html").send(html);
@@ -2270,7 +2306,7 @@ app.get("/", (req, res) => {
   .topnav-icons a.discord:hover{background:rgba(88,101,242,0.28);transform:translateY(-3px) scale(1.05);box-shadow:0 12px 26px rgba(88,101,242,0.4)}
   .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
   .topnav-icons a.steam:hover{background:rgba(27,40,56,0.85);transform:translateY(-3px) scale(1.05);box-shadow:0 12px 26px rgba(103,150,200,0.35)}
-  .topnav-icons img{width:28px;height:28px;border-radius:6px;object-fit:contain}
+  .topnav-icons img{width:34px;height:34px;border-radius:6px;object-fit:contain}
   .topnav-tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,color .15s,transform .15s,border-color .15s}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff;transform:translateY(-1px)}
