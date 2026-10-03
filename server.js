@@ -19,10 +19,12 @@ const STALE_MS = 5_000;
 const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY;
 const PRODUCT_PRICE_USD = 0.87;
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
-const REQUIRED_CONFIRMATIONS = 3;
 
-// MUST match the "Callback URL" in your Blockonomics store settings
-// character-for-character. No trailing slash, no extra query params.
+// Confirmations required per coin.
+// BTC: ~10 min/conf, 3 confs = ~30 min
+// USDT: ~12 sec/conf on Ethereum, 6 confs = ~1.5 min
+const CONFIRMATIONS = { BTC: 3, USDT: 6 };
+
 const STORE_CALLBACK = "https://serverssszz.onrender.com/webhook/blockonomics";
 
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
@@ -117,7 +119,7 @@ function findStockByKey(key) {
   return null;
 }
 
-// ─── MEMPOOL.SPACE ───
+// ─── BLOCKCHAIN HELPERS ───
 function fetchText(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "ScriptHub/1.0" } }, (resp) => {
@@ -130,80 +132,38 @@ function fetchText(url) {
   });
 }
 
+// Bitcoin via mempool.space (no key needed, real-time mempool state)
 const mempoolTxCache = new Map();
 const MEMPOOL_TTL = 3000;
 
-async function getAddressTxs(address) {
+async function getBtcAddressTxs(address) {
   const now = Date.now();
   const c = mempoolTxCache.get(address);
   if (c && now - c.at < MEMPOOL_TTL) return c.data;
   const raw = await fetchText(`https://mempool.space/api/address/${encodeURIComponent(address)}/txs`);
   let data;
-  try { data = JSON.parse(raw); } catch (e) { throw new Error("mempool.space bad json: " + raw.slice(0, 200)); }
+  try { data = JSON.parse(raw); } catch (e) { throw new Error("mempool.space bad json"); }
   mempoolTxCache.set(address, { data, at: now });
   return data;
 }
 
 let tipCache = { height: 0, at: 0 };
-async function getTipHeight() {
+async function getBtcTipHeight() {
   const now = Date.now();
   if (now - tipCache.at < 10000) return tipCache.height;
   const raw = await fetchText("https://mempool.space/api/blocks/tip/height");
   const h = parseInt(raw.trim(), 10);
-  if (!h || isNaN(h)) throw new Error("mempool.space bad tip height: " + raw.slice(0, 60));
+  if (!h || isNaN(h)) throw new Error("bad tip height");
   tipCache = { height: h, at: now };
   return h;
 }
 
-async function checkOrderPayment(order) {
-  if (order.status === "paid") {
-    return { status: "paid", confirmations: order.confirmations || REQUIRED_CONFIRMATIONS, txid: order.txid, keys: order.assignedKeys };
-  }
-  if (Date.now() > order.expiresAt && order.status !== "paid") {
-    order.status = "expired";
-    return { status: "expired", confirmations: 0 };
-  }
-  let txs;
-  try { txs = await getAddressTxs(order.address); }
-  catch (e) { return { status: "pending", confirmations: 0 }; }
-  if (!Array.isArray(txs) || txs.length === 0) return { status: "pending", confirmations: 0 };
-  const tx = txs[0];
-  order.txid = tx.txid;
-  if (!tx.status || !tx.status.confirmed) return { status: "mempool", confirmations: 0, txid: tx.txid };
-  let tip;
-  try { tip = await getTipHeight(); } catch (e) { tip = tipCache.height || tx.status.block_height; }
-  const confirmations = Math.max(0, tip - tx.status.block_height + 1);
-  order.confirmations = confirmations;
-  if (confirmations >= REQUIRED_CONFIRMATIONS) {
-    if (order.status !== "paid") {
-      order.status = "paid";
-      order.paidAt = Date.now();
-      assignKeysToOrder(order);
-    }
-    return { status: "paid", confirmations, txid: tx.txid, keys: order.assignedKeys };
-  }
-  return { status: "confirming", confirmations, txid: tx.txid };
-}
-
-function assignKeysToOrder(order) {
-  if (order.assignedKeys && order.assignedKeys.length > 0) return order.assignedKeys;
-  const picked = [];
-  for (const item of stock) {
-    if (picked.length >= order.qty) break;
-    if (item.soldTo) continue;
-    picked.push(item);
-  }
-  if (picked.length < order.qty) console.error(`[order] ${order.id} wants ${order.qty} but only ${picked.length} in stock`);
-  const keys = [];
-  for (const item of picked) {
-    item.soldTo = order.id;
-    if (!state.issued[item.key]) state.issued[item.key] = { orderId: order.id, at: Date.now() };
-    keys.push(item.key);
-  }
-  saveState();
-  order.assignedKeys = keys;
-  console.log(`[order] ${order.id} PAID — issued ${keys.length} keys`);
-  return keys;
+// For USDT (and any other crypto Blockonomics supports), we use
+// Blockonomics' own address API — it tracks confirmation state for
+// every payment address it has issued regardless of chain.
+async function getBlockonomicsAddressInfo(address) {
+  const data = await blockonomicsGet("/api/address?addr=" + encodeURIComponent(address));
+  return data;
 }
 
 // ─── Roblox thumbnail proxy ───
@@ -280,7 +240,7 @@ function blockonomicsPost(pathname, body) {
     }, (resp) => {
       let raw = "";
       resp.on("data", (c) => { raw += c; });
-      resp.on("end", () => { try { resolve(JSON.parse(raw)); } catch (e) { reject(e); } });
+      resp.on("end", () => { try { resolve(JSON.parse(raw)); } catch (e) { reject(new Error("bad json: " + raw.slice(0, 200))); } });
     });
     req.on("error", reject);
     req.setTimeout(10000, () => req.destroy(new Error("timeout")));
@@ -297,7 +257,7 @@ function blockonomicsGet(pathname) {
     }, (resp) => {
       let raw = "";
       resp.on("data", (c) => { raw += c; });
-      resp.on("end", () => { try { resolve(JSON.parse(raw)); } catch (e) { reject(e); } });
+      resp.on("end", () => { try { resolve(JSON.parse(raw)); } catch (e) { reject(new Error("bad json: " + raw.slice(0, 200))); } });
     });
     req.on("error", reject);
     req.setTimeout(10000, () => req.destroy(new Error("timeout")));
@@ -305,17 +265,19 @@ function blockonomicsGet(pathname) {
   });
 }
 
-// NOTE: No store auto-creation. The store must exist and be configured
-// in the Blockonomics dashboard — otherwise /api/new_address fails.
-async function createBitcoinAddress(orderId) {
-  const data = await blockonomicsPost("/api/new_address", {
-    match_callback: STORE_CALLBACK,
-  });
+// Create a payment address for the given coin (BTC or USDT).
+// Blockonomics returns an address tied to the correct store wallet.
+async function createPaymentAddress(coin) {
+  const body = { match_callback: STORE_CALLBACK };
+  // Blockonomics accepts a "crypto" hint — BTC is default; for USDT we pass it explicitly
+  if (coin === "USDT") body.crypto = "USDT";
+  const data = await blockonomicsPost("/api/new_address", body);
   if (!data || !data.address) {
     const err = new Error("Blockonomics: " + JSON.stringify(data));
     err.data = data;
     throw err;
   }
+  console.log(`[blockonomics] new ${coin} address: ${data.address}`);
   return data.address;
 }
 
@@ -328,7 +290,100 @@ async function getBtcPriceUsd() {
   const data = await blockonomicsGet("/api/price?currency=USD");
   if (Array.isArray(data) && data[0] && data[0].price) return data[0].price;
   if (data && data.price) return data.price;
-  throw new Error("BTC price fetch failed");
+  throw new Error("Price fetch failed");
+}
+
+// USDT is a stablecoin — its USD price is approximately 1.0.
+// We use the exact USD amount as the USDT amount.
+function getUsdtAmountUsd(usd) {
+  return usd.toFixed(2);
+}
+
+// ─── PAYMENT CHECKING ───
+async function checkOrderPayment(order) {
+  const required = CONFIRMATIONS[order.coin] || 3;
+
+  if (order.status === "paid") {
+    return { status: "paid", confirmations: order.confirmations || required, txid: order.txid, keys: order.assignedKeys };
+  }
+  if (Date.now() > order.expiresAt && order.status !== "paid") {
+    order.status = "expired";
+    return { status: "expired", confirmations: 0 };
+  }
+
+  if (order.coin === "BTC") {
+    let txs;
+    try { txs = await getBtcAddressTxs(order.address); }
+    catch (e) { return { status: "pending", confirmations: 0 }; }
+    if (!Array.isArray(txs) || txs.length === 0) return { status: "pending", confirmations: 0 };
+
+    const tx = txs[0];
+    order.txid = tx.txid;
+    if (!tx.status || !tx.status.confirmed) return { status: "mempool", confirmations: 0, txid: tx.txid };
+
+    let tip;
+    try { tip = await getBtcTipHeight(); } catch (e) { tip = tipCache.height || tx.status.block_height; }
+    const confirmations = Math.max(0, tip - tx.status.block_height + 1);
+    order.confirmations = confirmations;
+
+    if (confirmations >= required) {
+      if (order.status !== "paid") {
+        order.status = "paid";
+        order.paidAt = Date.now();
+        assignKeysToOrder(order);
+      }
+      return { status: "paid", confirmations, txid: tx.txid, keys: order.assignedKeys };
+    }
+    return { status: "confirming", confirmations, txid: tx.txid };
+  }
+
+  // USDT — use Blockonomics address API
+  try {
+    const info = await getBlockonomicsAddressInfo(order.address);
+    const txCount = (info && info.tx) || 0;
+    if (txCount === 0) return { status: "pending", confirmations: 0 };
+
+    // Blockonomics returns confirmed/unconfirmed balance and confirmations for the address
+    const confs = Number(info.confirmations || info.confirmation_count || 0);
+    const txid = info.tx_list && info.tx_list[0] && info.tx_list[0].txid;
+    order.txid = txid || order.txid;
+    order.confirmations = confs;
+
+    if (confs >= required) {
+      if (order.status !== "paid") {
+        order.status = "paid";
+        order.paidAt = Date.now();
+        assignKeysToOrder(order);
+      }
+      return { status: "paid", confirmations: confs, txid: order.txid, keys: order.assignedKeys };
+    }
+    if (confs === 0) return { status: "mempool", confirmations: 0, txid: order.txid };
+    return { status: "confirming", confirmations: confs, txid: order.txid };
+  } catch (e) {
+    console.error("[check-payment USDT] error:", e.message);
+    return { status: "pending", confirmations: 0 };
+  }
+}
+
+function assignKeysToOrder(order) {
+  if (order.assignedKeys && order.assignedKeys.length > 0) return order.assignedKeys;
+  const picked = [];
+  for (const item of stock) {
+    if (picked.length >= order.qty) break;
+    if (item.soldTo) continue;
+    picked.push(item);
+  }
+  if (picked.length < order.qty) console.error(`[order] ${order.id} wants ${order.qty} but only ${picked.length} in stock`);
+  const keys = [];
+  for (const item of picked) {
+    item.soldTo = order.id;
+    if (!state.issued[item.key]) state.issued[item.key] = { orderId: order.id, at: Date.now() };
+    keys.push(item.key);
+  }
+  saveState();
+  order.assignedKeys = keys;
+  console.log(`[order] ${order.id} PAID — issued ${keys.length} keys`);
+  return keys;
 }
 
 // ─── PAGE SHELL ───
@@ -356,7 +411,6 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
     background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.7) 100%)}
   .content{position:relative;z-index:1;max-width:880px;margin:0 auto}
   a{color:#b9a3ff}
-
   .topnav{display:flex;align-items:center;gap:14px;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid rgba(70,70,82,0.4)}
   .topnav-icons{display:flex;gap:10px}
   .topnav-icons a{display:inline-flex;align-items:center;justify-content:center;
@@ -373,12 +427,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
     font-size:13px;font-weight:600;transition:background .15s,color .15s}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
   .topnav-tabs a.active{background:rgba(255,255,255,0.08);color:#fff}
-  @media (max-width:520px){
-    .topnav{flex-wrap:wrap;gap:10px}
-    .topnav-tabs{margin-left:0;width:100%}
-    .topnav-tabs a{flex:1;text-align:center}
-  }
-
+  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%}.topnav-tabs a{flex:1;text-align:center}}
   .tag{display:inline-block;padding:4px 10px;border-radius:6px;
     background:rgba(200,60,60,0.15);color:#ff7a7a;font-size:11px;font-weight:700;
     letter-spacing:0.6px;margin-bottom:14px}
@@ -423,13 +472,27 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
     font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
     transition:background .15s}
   .copy-btn:hover{background:rgba(120,90,255,0.3)}
-
   .conf-tracker{display:flex;justify-content:center;gap:8px;margin:20px 0}
   .conf-dot{width:14px;height:14px;border-radius:50%;background:rgba(70,70,82,0.5);
     border:2px solid rgba(70,70,82,0.7);transition:all .4s ease}
   .conf-dot.filled{background:#7ddd9f;border-color:#7ddd9f;box-shadow:0 0 12px rgba(125,221,159,0.6)}
   .conf-status{text-align:center;font-size:14px;color:#a8a8b8;margin-top:8px}
   .conf-count{text-align:center;font-size:15px;font-weight:700;color:#fff;margin-top:4px}
+  /* Coin selector */
+  .coin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .coin{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;
+    background:rgba(18,18,24,0.6);border:2px solid rgba(70,70,82,0.5);cursor:pointer;
+    transition:border-color .15s,background .15s,transform .15s;user-select:none}
+  .coin:hover{background:rgba(28,28,34,0.8);transform:translateY(-1px)}
+  .coin.selected{border-color:#e03a3a;background:rgba(224,58,58,0.1)}
+  .coin-icon{width:32px;height:32px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+  .coin-icon.btc{background:linear-gradient(135deg,#f7931a,#ffb84d)}
+  .coin-icon.usdt{background:linear-gradient(135deg,#26a17b,#4fcf9b)}
+  .coin-meta{flex:1;min-width:0}
+  .coin-name{font-size:14px;font-weight:700;color:#fff}
+  .coin-desc{font-size:11px;color:#8a8a9a;margin-top:2px}
+  @media (max-width:520px){.coin-grid{grid-template-columns:1fr}}
   ${extraCss}
 </style></head>
 <body>
@@ -478,7 +541,6 @@ ${extraJs}
 </script></body></html>`;
 }
 
-// ─── TOP NAV ───
 function topNav(active) {
   const cls = (name) => active === name ? "active" : "";
   return `
@@ -509,7 +571,7 @@ app.get("/nfa", (req, res) => {
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">NFA Loader</div>
-    <p class="sub">Prime enabled. Delivered instantly after payment. Pay with Bitcoin.</p>
+    <p class="sub">Prime enabled. Delivered instantly after payment. Pay with Bitcoin or USDT.</p>
 
     <div class="card" style="max-width:480px;border-color:rgba(200,60,60,0.5)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -559,7 +621,7 @@ app.get("/cart", (req, res) => {
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
     <div class="h1">Your Cart</div>
-    <p class="sub">Review your order before paying.</p>
+    <p class="sub">Choose your payment method and review your order.</p>
 
     <div class="card" style="display:flex;align-items:center;gap:16px;max-width:640px;margin-bottom:20px">
       <div style="width:52px;height:52px;border-radius:10px;background:rgba(200,60,60,0.15);
@@ -572,25 +634,59 @@ app.get("/cart", (req, res) => {
       <div style="color:#8a8a9a;font-size:13px"><span id="cartQty">${qty}</span> account${qty !== 1 ? "s" : ""}</div>
     </div>
 
+    <div style="max-width:640px;margin-bottom:20px">
+      <div class="label">Payment Method</div>
+      <div class="coin-grid">
+        <div class="coin selected" id="coinBTC" onclick="selectCoin('BTC')">
+          <div class="coin-icon btc">₿</div>
+          <div class="coin-meta">
+            <div class="coin-name">Bitcoin</div>
+            <div class="coin-desc">BTC · 3 confirmations</div>
+          </div>
+        </div>
+        <div class="coin" id="coinUSDT" onclick="selectCoin('USDT')">
+          <div class="coin-icon usdt">₮</div>
+          <div class="coin-meta">
+            <div class="coin-name">USDT</div>
+            <div class="coin-desc">Tether · Ethereum · 6 confs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     ${hasStock ? '' : `<div class="card" style="max-width:640px;border-color:rgba(200,60,60,0.5);color:#ff9a9a;margin-bottom:20px">
       Not enough stock — only ${available} available.
     </div>`}
 
-    <button class="btn" style="max-width:640px" onclick="checkout()" ${hasStock ? '' : 'disabled'}>Go to cart → Pay with Bitcoin</button>
+    <button class="btn" style="max-width:640px" id="payBtn" onclick="checkout()" ${hasStock ? '' : 'disabled'}>Pay with Bitcoin →</button>
     <div id="err" style="color:#ff7a7a;margin-top:16px;display:none;max-width:640px"></div>
 
     <script>
       const qty = ${qty};
+      let coin = 'BTC';
+
+      function selectCoin(c){
+        coin = c;
+        document.getElementById('coinBTC').classList.toggle('selected', c === 'BTC');
+        document.getElementById('coinUSDT').classList.toggle('selected', c === 'USDT');
+        document.getElementById('payBtn').textContent = 'Pay with ' + (c === 'BTC' ? 'Bitcoin' : 'USDT') + ' →';
+      }
+
       async function checkout(){
-        const btn = event.target;
+        const btn = document.getElementById('payBtn');
         btn.disabled = true; btn.textContent = 'Creating order...';
         try {
-          const r = await fetch('/checkout', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ qty }) });
+          const r = await fetch('/checkout', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ qty, coin })
+          });
           const data = await r.json();
           if (!data.ok) throw new Error(data.error || 'checkout failed');
           window.location.href = '/pay/' + data.orderId;
         } catch (e) {
-          btn.disabled = false; btn.textContent = 'Go to cart → Pay with Bitcoin';
+          btn.disabled = false;
+          btn.textContent = 'Pay with ' + (coin === 'BTC' ? 'Bitcoin' : 'USDT') + ' →';
           document.getElementById('err').style.display = 'block';
           document.getElementById('err').textContent = 'Error: ' + e.message;
         }
@@ -604,17 +700,36 @@ app.get("/cart", (req, res) => {
 app.post("/checkout", async (req, res) => {
   try {
     const qty = Math.max(1, Math.min(999, parseInt(req.body.qty) || 1));
+    let coin = String(req.body.coin || "BTC").toUpperCase();
+    if (coin !== "BTC" && coin !== "USDT") coin = "BTC";
+
     if (availableStock().length < qty) {
       return res.status(400).json({ ok: false, error: `Not enough stock. Only ${availableStock().length} available.` });
     }
+
     const totalUsd = PRODUCT_PRICE_USD * qty;
     const orderId = "ord_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    const address = await createBitcoinAddress(orderId);
-    const btcPrice = await getBtcPriceUsd();
-    const btcAmount = (totalUsd / btcPrice).toFixed(8);
-    const order = { id: orderId, qty, totalUsd, btcAmount, btcPrice, address, status: "pending", createdAt: Date.now(), expiresAt: Date.now() + PAYMENT_WINDOW_MS, txid: null, confirmations: 0, assignedKeys: null };
+
+    const address = await createPaymentAddress(coin);
+
+    let cryptoAmount;
+    if (coin === "BTC") {
+      const btcPrice = await getBtcPriceUsd();
+      cryptoAmount = (totalUsd / btcPrice).toFixed(8);
+    } else {
+      cryptoAmount = getUsdtAmountUsd(totalUsd);
+    }
+
+    const order = {
+      id: orderId, qty, coin, totalUsd, cryptoAmount,
+      address, status: "pending",
+      createdAt: Date.now(),
+      expiresAt: Date.now() + PAYMENT_WINDOW_MS,
+      txid: null, confirmations: 0, assignedKeys: null,
+    };
     orders.set(orderId, order);
-    console.log(`[order] created ${orderId} — ${qty} × $${PRODUCT_PRICE_USD} = $${totalUsd} → ${address}`);
+    console.log(`[order] created ${orderId} — ${qty} × $${PRODUCT_PRICE_USD} = $${totalUsd} in ${coin} → ${address}`);
+
     res.json({ ok: true, orderId });
   } catch (e) {
     console.error("[checkout] error:", e.message, e.data || "");
@@ -636,10 +751,22 @@ app.get("/pay/:orderId", (req, res) => {
     `));
   }
 
-  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
-    encodeURIComponent("bitcoin:" + order.address + "?amount=" + order.btcAmount);
+  const required = CONFIRMATIONS[order.coin] || 3;
+  const coinName = order.coin === "BTC" ? "Bitcoin" : "USDT";
+  const coinSymbol = order.coin === "BTC" ? "BTC" : "USDT";
+  const isBTC = order.coin === "BTC";
 
-  const html = pageShell(`Pay ${order.btcAmount} BTC`, `
+  // Payment URI: bitcoin: prefix works for BTC. For USDT we just show address.
+  const qrData = isBTC
+    ? `bitcoin:${order.address}?amount=${order.cryptoAmount}`
+    : `${order.address}`;
+  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(qrData);
+
+  // Build confirmation dots dynamically based on coin
+  let dotsHtml = '';
+  for (let i = 0; i < required; i++) dotsHtml += `<div class="conf-dot" data-i="${i+1}"></div>`;
+
+  const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol}`, `
     ${topNav('nfa')}
     <div style="max-width:560px;margin:0 auto;position:relative">
       <button id="cancelBtn" onclick="cancelOrder()" style="position:absolute;top:16px;left:16px;z-index:2;
@@ -649,14 +776,20 @@ app.get("/pay/:orderId", (req, res) => {
       </button>
       <div class="card" style="padding:28px" id="payCard">
         <div style="text-align:center;margin-bottom:20px">
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border-radius:20px;
+                      background:rgba(224,58,58,0.15);border:1px solid rgba(224,58,58,0.4);
+                      font-size:11px;font-weight:700;color:#ff9a9a;text-transform:uppercase;
+                      letter-spacing:1px;margin-bottom:12px">
+            ${order.coin === "BTC" ? "₿" : "₮"} ${coinName}
+          </div>
           <div class="label" style="margin-bottom:6px">Send exactly</div>
-          <div style="font-size:26px;font-weight:700;color:#fff">${order.btcAmount} <span style="color:#8a8a9a;font-size:16px">BTC</span></div>
+          <div style="font-size:26px;font-weight:700;color:#fff">${order.cryptoAmount} <span style="color:#8a8a9a;font-size:16px">${coinSymbol}</span></div>
           <div style="color:#8a8a9a;font-size:12px;margin-top:4px">≈ €${order.totalUsd.toFixed(2)} · ${order.qty} account${order.qty !== 1 ? "s" : ""}</div>
         </div>
         <div style="display:flex;justify-content:center;margin-bottom:20px">
           <img src="${qrUrl}" alt="QR" style="border-radius:12px;background:#fff;padding:8px"/>
         </div>
-        <div class="label">Bitcoin Address</div>
+        <div class="label">${coinName} Address</div>
         <div id="address" onclick="copyAddr()" style="cursor:pointer;font-family:ui-monospace,monospace;
                     font-size:12px;color:#b9a3ff;background:rgba(18,18,24,0.7);
                     border:1px solid rgba(70,70,82,0.6);border-radius:8px;padding:10px 12px;
@@ -670,12 +803,8 @@ app.get("/pay/:orderId", (req, res) => {
         </div>
 
         <div style="text-align:center">
-          <div class="label" style="margin-bottom:6px">Confirmations</div>
-          <div class="conf-tracker" id="confTracker">
-            <div class="conf-dot" data-i="1"></div>
-            <div class="conf-dot" data-i="2"></div>
-            <div class="conf-dot" data-i="3"></div>
-          </div>
+          <div class="label" style="margin-bottom:6px">Confirmations (${required} required)</div>
+          <div class="conf-tracker" id="confTracker">${dotsHtml}</div>
           <div class="conf-status" id="confStatus">Waiting for payment...</div>
           <div class="conf-count" id="confCount"></div>
         </div>
@@ -707,7 +836,7 @@ app.get("/pay/:orderId", (req, res) => {
         <div style="font-size:17px;font-weight:600;color:#fff;margin-bottom:12px">Transaction Cancelled</div>
         <div style="color:#a8a8b8;font-size:14px;line-height:1.55;margin-bottom:20px">
           Transaction canceled because nothing was sent within the 15 minutes time,
-          Please contact the owner if you actually sent the Bitcoin.
+          Please contact the owner if you actually sent the ${coinName}.
         </div>
         <a href="/nfa" style="display:inline-block;padding:11px 28px;background:linear-gradient(135deg,#7850ff,#2f8fff);
            color:#fff;font-weight:600;font-size:14px;border-radius:10px;text-decoration:none">Okay</a>
@@ -717,7 +846,7 @@ app.get("/pay/:orderId", (req, res) => {
     <script>
       const ORDER_ID = ${JSON.stringify(order.id)};
       const EXPIRES_AT = ${order.expiresAt};
-      const QTY = ${order.qty};
+      const REQUIRED = ${required};
       let cancelled = false, paid = false, lastConf = -1;
 
       function fmt(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
@@ -744,7 +873,7 @@ app.get("/pay/:orderId", (req, res) => {
         });
         if (n === 0) {
           document.getElementById('confCount').textContent = '';
-        } else if (n >= 3) {
+        } else if (n >= REQUIRED) {
           document.getElementById('confCount').textContent = 'Confirmed';
         } else {
           document.getElementById('confCount').textContent = n + ' confirmation' + (n === 1 ? '' : 's');
@@ -773,8 +902,7 @@ app.get("/pay/:orderId", (req, res) => {
       };
 
       async function poll(){
-        if(cancelled)return;
-        if(paid) return;
+        if(cancelled || paid) return;
         try{
           const r = await fetch('/check-payment/' + ORDER_ID + '?t=' + Date.now());
           const data = await r.json();
@@ -784,12 +912,9 @@ app.get("/pay/:orderId", (req, res) => {
             document.getElementById('timer').textContent = '✓';
             document.getElementById('timer').style.color = '#7ddd9f';
             document.getElementById('confStatus').textContent = 'Payment confirmed!';
-            paintConfirmations(3);
-            if (data.keys && data.keys.length > 0) {
-              showKeys(data.keys);
-            } else {
-              document.getElementById('confStatus').textContent = 'Payment confirmed, but no stock available. Please contact support.';
-            }
+            paintConfirmations(REQUIRED);
+            if (data.keys && data.keys.length > 0) showKeys(data.keys);
+            else document.getElementById('confStatus').textContent = 'Payment confirmed, but no stock available. Please contact support.';
             return;
           }
 
@@ -851,7 +976,7 @@ app.post("/cancel/:orderId", (req, res) => {
 
 // ─── /webhook/blockonomics ───
 app.get("/webhook/blockonomics", (req, res) => {
-  console.log(`[webhook] blockonomics order=${req.query.order} status=${req.query.status}`);
+  console.log(`[webhook] blockonomics order=${req.query.order} status=${req.query.status} addr=${req.query.addr || ""}`);
   res.json({ ok: true });
 });
 
