@@ -369,8 +369,6 @@ const CURSOR_SCRIPT = `
 `;
 
 // ─── PAGE SHELL ───
-// NOTE: AdSense Auto Ads script is now injected into every page shell,
-// so it loads on /nfa, /cart, /pay/*, /redeem, 404, etc.
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${title}</title>
@@ -1281,7 +1279,7 @@ app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Roblox Script Hub Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}" crossorigin="anonymous"></script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4246726390307705" crossorigin="anonymous"></script>
 <style>
   *{box-sizing:border-box}
   html{overflow-x:hidden}
@@ -1375,14 +1373,14 @@ app.get("/", (req, res) => {
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
-    grid-auto-rows:96px;              /* every card slot is exactly 96px tall */
+    grid-auto-rows:96px;
     gap:14px;
     width:100%;
-    align-content:start;              /* stop rows from stretching to fill height */
-    max-height:460px;                 /* where scrolling kicks in */
+    align-content:start;
+    max-height:460px;
     overflow-y:auto;
     overflow-x:hidden;
-    padding-right:6px;                /* breathing room for the scrollbar */
+    padding-right:6px;
     scrollbar-width:thin;
     scrollbar-color:rgba(120,90,255,0.4) rgba(28,28,34,0.4);
   }
@@ -1399,7 +1397,7 @@ app.get("/", (req, res) => {
     display:flex;gap:14px;align-items:center;
     transition:transform .2s cubic-bezier(.2,.9,.3,1.1),border-color .2s,box-shadow .25s;
     min-width:0;position:relative;overflow:hidden;
-    height:96px;                      /* fixed height — never stretches */
+    height:96px;
   }
   .card::before{
     content:'';position:absolute;inset:0;border-radius:14px;
@@ -1430,7 +1428,6 @@ app.get("/", (req, res) => {
   .ws{background:rgba(30,58,42,0.8);color:#7ddd9f}
   .http{background:rgba(58,47,30,0.8);color:#ddd47f}
 
-  /* ── Empty state: spans full width, fixed modest height, never stretches ── */
   .empty{
     grid-column:1/-1;
     display:flex;align-items:center;justify-content:center;
@@ -1442,8 +1439,8 @@ app.get("/", (req, res) => {
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   }
 
-  /* ── Promo slot: neutrally-named so uBlock/EasyList do NOT cosmetic-filter it.
-        Reserves real height so no layout jump when AdSense fills or collapses. ── */
+  /* ── Promo slots: neutrally-named so uBlock/EasyList do NOT cosmetic-filter.
+        Each reserves real height so no layout jump when AdSense fills or collapses. ── */
   .promo-slot{
     width:100%;
     max-width:970px;
@@ -1549,14 +1546,20 @@ app.get("/", (req, res) => {
 
     <div class="promo-slot" id="promoSlot">
       <div class="promo-tag">Sponsored</div>
-      <!--
-        Replace data-ad-slot with your real AdSense ad unit ID.
-        "0000000000" is a placeholder and will never serve a real ad.
-      -->
       <ins class="adsbygoogle"
            style="display:block;width:100%;min-height:90px"
-           data-ad-client="${ADSENSE_CLIENT}"
+           data-ad-client="ca-pub-4246726390307705"
            data-ad-slot="0000000000"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+    </div>
+
+    <div class="promo-slot" id="promoSlot2">
+      <div class="promo-tag">Advertisements</div>
+      <ins class="adsbygoogle"
+           style="display:block;width:100%;min-height:90px"
+           data-ad-client="ca-pub-4246726390307705"
+           data-ad-slot="7741832522"
            data-ad-format="auto"
            data-full-width-responsive="true"></ins>
     </div>
@@ -1605,9 +1608,10 @@ const FB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns=
   tk()
 })();
 
-// AdSense push — wrapped so a throw can never kill the client-list renderer below.
+// AdSense push — one push per <ins> element. Loader in <head> covers both slots.
 (function(){
   try {
+    (window.adsbygoogle = window.adsbygoogle || []).push({});
     (window.adsbygoogle = window.adsbygoogle || []).push({});
   } catch (e) {
     // AdSense not ready / blocked — safe to ignore, layout keeps its reserved height.
@@ -1669,5 +1673,5 @@ server.listen(PORT, async () => {
   loadState();
   console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
   console.log(`[boot] ads.txt will serve: google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0`);
-  console.log(`[boot] Auto Ads client: ${ADSENSE_CLIENT}`);
+  console.log(`[boot] AdSense client: ${ADSENSE_CLIENT}`);
 });
