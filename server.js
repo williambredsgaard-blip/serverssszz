@@ -226,6 +226,7 @@ function serveLua(name) {
 app.get("/hubscript.lua",  serveLua("hubscript.lua"));
 app.get("/controller.lua", serveLua("controller.lua"));
 app.get("/ddg.lua",        serveLua("ddg.lua"));
+app.get("/mm2.lua",        serveLua("mm2.lua"));
 app.get("/wh.txt",         serveLua("wh.txt"));
 
 app.get("/files", (req, res) => {
