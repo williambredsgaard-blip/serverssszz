@@ -16,8 +16,13 @@ const httpClients = new Map();
 
 const STALE_MS = 5_000;
 
-// ─── CONFIG — EDIT THESE ───
-const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY || "YOUR_BLOCKONOMICS_API_KEY";
+// ─── CONFIG ───
+const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY;
+
+if (!BLOCKONOMICS_API_KEY) {
+  console.error("[config] BLOCKONOMICS_API_KEY is not set. Add it in Render → Environment.");
+}
+
 const PRODUCT_PRICE_USD = 0.87;
 const PRODUCT_NAME = "CS2 Prime Account";
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -50,7 +55,7 @@ function bumpExecutions() {
 process.on("SIGINT", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
 process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
 
-// ─── Roblox thumbnail proxy (with cache) ───
+// ─── Roblox thumbnail proxy ───
 const thumbCache = new Map();
 const THUMB_TTL   = 60 * 60 * 1000;
 const THUMB_NEG_TTL = 60 * 1000;
@@ -139,10 +144,10 @@ function findLuaFile(name) {
   return null;
 }
 
-// ─── ORDERS (in-memory; swap for SQLite in production) ───
+// ─── ORDERS ───
 const orders = new Map();
 
-// ─── BLOCKONOMICS API helpers ───
+// ─── BLOCKONOMICS helpers ───
 function blockonomicsPost(pathname, body) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
@@ -208,7 +213,7 @@ async function getBtcPriceUsd() {
   throw new Error("Could not fetch BTC price: " + JSON.stringify(data));
 }
 
-// ─── Shared page shell (background + fonts) ───
+// ─── Shared page shell ───
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${title}</title>
@@ -238,6 +243,17 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "") {
     background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.7) 100%)}
   .content{position:relative;z-index:1;max-width:880px;margin:0 auto}
   a{color:#b9a3ff}
+  .nav{display:flex;gap:10px;align-items:center;margin-bottom:20px}
+  .nav a{display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,0.05);
+    border:1px solid rgba(70,70,82,0.6);text-decoration:none;
+    transition:transform .15s ease,background .2s,border-color .2s,box-shadow .2s}
+  .nav a:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.4)}
+  .nav a.discord{background:rgba(88,101,242,0.12);border-color:rgba(88,101,242,0.35)}
+  .nav a.discord:hover{background:rgba(88,101,242,0.25);border-color:rgba(88,101,242,0.7)}
+  .nav a.steam{background:rgba(27,40,56,0.5);border-color:rgba(103,150,200,0.35)}
+  .nav a.steam:hover{background:rgba(27,40,56,0.8);border-color:rgba(103,150,200,0.7)}
+  .nav img{width:30px;height:30px;display:block;border-radius:6px;object-fit:contain}
   ${extraCss}
 </style></head>
 <body>
@@ -286,15 +302,33 @@ ${extraJs}
 </script></body></html>`;
 }
 
-// ─── Product page ───
-app.get("/product", (req, res) => {
-  const html = pageShell("Buy CS2 Prime Accounts", `
-    <a href="/" style="color:#8a8a9a;text-decoration:none;font-size:13px">← Back to dashboard</a>
-    <h1 style="font-size:24px;margin:16px 0 4px;color:#fff">Counter-Strike 2 — Prime Accounts</h1>
+// ─── Shared nav HTML ───
+function navHtml(active) {
+  const dClass = active === 'discord' ? 'discord' : 'discord';
+  const sClass = active === 'steam' ? 'steam' : 'steam';
+  return `
+    <div class="nav">
+      <a class="${dClass}" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer" title="Discord">
+        <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
+             onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
+      </a>
+      <a class="${sClass}" href="/nfa" title="NFA Shop">
+        <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam"
+             onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';">
+      </a>
+    </div>
+  `;
+}
+
+// ─── /nfa page (product + cart + checkout entry) ───
+app.get("/nfa", (req, res) => {
+  const html = pageShell("NFA Shop — Script Hub", `
+    ${navHtml('steam')}
+    <h1 style="font-size:24px;margin:16px 0 4px;color:#fff">NFA Shop</h1>
     <p style="color:#8a8a9a;font-size:13px;margin:0 0 24px">Prime enabled. Delivered instantly after payment.</p>
 
-    <div style="background:rgba(28,28,34,0.7);backdrop-filter:blur(14px);
-                border:1px solid rgba(200,60,60,0.5);border-radius:16px;padding:24px;
+    <div style="background:rgba(28,28,34,0.75);backdrop-filter:blur(14px);
+                border:1px solid rgba(200,60,60,0.5);border-radius:16px;padding:28px;
                 max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:18px;font-weight:600;color:#fff">CS2 Prime Account</div>
@@ -350,7 +384,8 @@ app.get("/cart", (req, res) => {
   const total = (PRODUCT_PRICE_USD * qty).toFixed(2);
 
   const html = pageShell("Cart — Script Hub", `
-    <a href="/product" style="color:#8a8a9a;text-decoration:none;font-size:13px">← Back to product</a>
+    ${navHtml('steam')}
+    <a href="/nfa" style="color:#8a8a9a;text-decoration:none;font-size:13px">← Back to NFA shop</a>
     <h1 style="font-size:22px;margin:16px 0 24px;color:#fff">Your Cart</h1>
 
     <div style="background:rgba(28,28,34,0.75);backdrop-filter:blur(14px);
@@ -402,7 +437,7 @@ app.get("/cart", (req, res) => {
   res.set("Content-Type", "text/html").send(html);
 });
 
-// ─── Create order + get BTC address ───
+// ─── Create order ───
 app.post("/checkout", async (req, res) => {
   try {
     const qty = Math.max(1, Math.min(999, parseInt(req.body.qty) || 1));
@@ -442,11 +477,12 @@ app.get("/pay/:orderId", (req, res) => {
   const order = orders.get(req.params.orderId);
   if (!order) {
     return res.status(404).send(pageShell("Order not found", `
+      ${navHtml('steam')}
       <div style="text-align:center;padding:60px 20px">
         <h1 style="color:#fff">Order not found</h1>
         <p style="color:#8a8a9a">This order does not exist or has already expired.</p>
-        <a href="/product" style="display:inline-block;margin-top:16px;padding:12px 24px;
-           background:#7850ff;color:#fff;border-radius:8px;text-decoration:none">Back to product</a>
+        <a href="/nfa" style="display:inline-block;margin-top:16px;padding:12px 24px;
+           background:#7850ff;color:#fff;border-radius:8px;text-decoration:none">Back to NFA</a>
       </div>
     `));
   }
@@ -455,6 +491,7 @@ app.get("/pay/:orderId", (req, res) => {
     encodeURIComponent("bitcoin:" + order.address + "?amount=" + order.btcAmount);
 
   const html = pageShell(`Pay ${order.btcAmount} BTC`, `
+    ${navHtml('steam')}
     <div style="max-width:560px;margin:0 auto;background:rgba(28,28,34,0.78);
                 backdrop-filter:blur(16px);border:1px solid rgba(70,70,82,0.6);
                 border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.55)">
@@ -513,7 +550,7 @@ app.get("/pay/:orderId", (req, res) => {
           Transaction canceled because nothing was sent within the 15 minutes time,
           Please contact the owner if you actually sent the Bitcoin.
         </div>
-        <a href="/" style="display:inline-block;padding:11px 28px;
+        <a href="/nfa" style="display:inline-block;padding:11px 28px;
            background:linear-gradient(135deg,#7850ff,#2f8fff);color:#fff;
            font-weight:600;font-size:14px;border-radius:10px;text-decoration:none;
            box-shadow:0 8px 24px rgba(120,80,255,0.4)">Okay</a>
@@ -587,7 +624,7 @@ app.get("/pay/:orderId", (req, res) => {
   res.set("Content-Type", "text/html").send(html);
 });
 
-// ─── Poll for payment status (called by the payment page) ───
+// ─── Payment status check ───
 app.get("/check-payment/:orderId", async (req, res) => {
   const order = orders.get(req.params.orderId);
   if (!order) return res.json({ status: "expired" });
@@ -599,7 +636,6 @@ app.get("/check-payment/:orderId", async (req, res) => {
     return res.json({ status: "expired" });
   }
 
-  // Ask Blockonomics whether the address has received anything
   try {
     const data = await blockonomicsGet("/api/address?addr=" + encodeURIComponent(order.address));
     const txCount = (data && data.tx || 0);
@@ -626,7 +662,7 @@ app.post("/cancel/:orderId", (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Blockonomics webhook (fires when payment hits mempool / confirms) ───
+// ─── Blockonomics webhook ───
 app.get("/webhook/blockonomics", (req, res) => {
   const orderId = req.query.order;
   const status = parseInt(req.query.status, 10);
@@ -649,8 +685,7 @@ app.get("/webhook/blockonomics", (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Existing endpoints below (unchanged) ───
-
+// ─── Existing relay endpoints ───
 function userListPayload() {
   const users = [];
   for (const [ws, info] of wsClients) if (info.userId) users.push({ ...info, transport: "ws" });
@@ -848,6 +883,7 @@ app.get("/clients", async (req, res) => {
   res.json({ users: enriched, executions: stats.executions });
 });
 
+// ─── Main dashboard (now just clients + stats, no shop link) ───
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
@@ -879,13 +915,17 @@ app.get("/", (req, res) => {
     background:linear-gradient(90deg,#fff,#b9a3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
   .brand{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px}
-  .discord-link{display:inline-flex;align-items:center;justify-content:center;
-    width:44px;height:44px;border-radius:12px;background:rgba(88,101,242,0.12);
-    border:1px solid rgba(88,101,242,0.35);flex-shrink:0;text-decoration:none;margin-top:4px;
+  .nav{display:flex;gap:10px;align-items:center;margin-bottom:20px}
+  .nav a{display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,0.05);
+    border:1px solid rgba(70,70,82,0.6);text-decoration:none;
     transition:transform .15s ease,background .2s,border-color .2s,box-shadow .2s}
-  .discord-link:hover{background:rgba(88,101,242,0.25);border-color:rgba(88,101,242,0.7);
-    transform:translateY(-2px);box-shadow:0 6px 20px rgba(88,101,242,0.35)}
-  .discord-link img{width:30px;height:30px;display:block;border-radius:6px;object-fit:contain}
+  .nav a:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.4)}
+  .nav a.discord{background:rgba(88,101,242,0.12);border-color:rgba(88,101,242,0.35)}
+  .nav a.discord:hover{background:rgba(88,101,242,0.25);border-color:rgba(88,101,242,0.7)}
+  .nav a.steam{background:rgba(27,40,56,0.5);border-color:rgba(103,150,200,0.35)}
+  .nav a.steam:hover{background:rgba(27,40,56,0.8);border-color:rgba(103,150,200,0.7)}
+  .nav img{width:30px;height:30px;display:block;border-radius:6px;object-fit:contain}
   .header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px}
   .stats{display:flex;gap:10px;flex-wrap:wrap}
   .stat{background:rgba(28,28,34,0.7);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
@@ -908,9 +948,6 @@ app.get("/", (req, res) => {
   .http{background:rgba(58,47,30,0.8);color:#ddd47f;border:1px solid rgba(221,212,127,0.2)}
   .empty{color:#666;padding:60px 20px;text-align:center;grid-column:1/-1;
     background:rgba(28,28,34,0.4);border:1px dashed rgba(70,70,82,0.5);border-radius:12px}
-  .shop-link{display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#7850ff,#2f8fff);
-    color:#fff;font-weight:600;font-size:13px;border-radius:10px;text-decoration:none;margin-bottom:20px;
-    box-shadow:0 6px 20px rgba(120,80,255,0.35)}
   .ad-wrap{max-width:1200px;margin-top:24px;padding:14px;background:rgba(28,28,34,0.4);
     border:1px solid rgba(70,70,82,0.5);border-radius:12px;text-align:center;min-height:100px}
   .ad-label{font-size:10px;color:#5a5a6a;text-transform:uppercase;letter-spacing:1.2px;font-weight:600;margin-bottom:8px}
@@ -923,10 +960,16 @@ app.get("/", (req, res) => {
   <div class="content">
     <div class="header">
       <div class="brand">
-        <a class="discord-link" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer">
-          <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
-               onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
-        </a>
+        <div class="nav">
+          <a class="discord" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer">
+            <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png" alt="Discord"
+                 onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
+          </a>
+          <a class="steam" href="/nfa" title="NFA Shop">
+            <img src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/steam.png" alt="Steam"
+                 onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/steam.png';">
+          </a>
+        </div>
         <div class="title-block">
           <h1>Script Hub Dashboard</h1>
           <div class="sub">Live view of every client running the hub script</div>
@@ -937,8 +980,6 @@ app.get("/", (req, res) => {
         <div class="stat"><div class="label">Online</div><div class="value" id="count">0</div></div>
       </div>
     </div>
-
-    <a class="shop-link" href="/product">🛒 Buy CS2 Prime Accounts — €0.87 each</a>
 
     <div class="grid" id="grid"><div class="empty">Loading...</div></div>
 
@@ -985,7 +1026,7 @@ const place=u.placeId?('Place '+u.placeId):'Unknown';
 const safeName=(u.displayName||('User '+uid)).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 return '<div class="card"><img class="av" src="'+thumb+'" alt="" onerror="this.src=\\''+FALLBACK_THUMB+'\\'">'+
 '<div class="meta"><div class="name">'+safeName+'</div><div class="game">'+place+'</div>'+badge+'</div></div>'}).join('')}
-catch(e){document.getElementById('grid').innerHTML='<div class="empty">Error: '+e.message+'</div>'}}
+catch(e){document.getElementById('grid').innerHTML='<div class="error">Error: '+e.message+'</div>'}}
 refresh();setInterval(refresh,2000);
 </script></body></html>`);
 });
@@ -998,6 +1039,7 @@ app.use((req, res) => {
   }[c]));
 
   res.status(404).set("Content-Type", "text/html").send(pageShell("Page Not Found — Script Hub", `
+    ${navHtml('none')}
     <div style="max-width:520px;margin:0 auto;padding:36px 32px;background:rgba(28,28,34,0.72);
                 backdrop-filter:blur(16px);border:1px solid rgba(70,70,82,0.7);border-radius:16px;
                 text-align:center;box-shadow:0 24px 60px rgba(0,0,0,0.55)">
