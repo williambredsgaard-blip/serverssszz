@@ -1,4 +1,4 @@
--- Duck Duck Goose Hub v4.3 — input fix + panic
+-- Duck Duck Hub — Made With Love
 local OK, ERR = pcall(function()
 
 local Rayfield
@@ -17,9 +17,9 @@ end
 assert(Rayfield, "Rayfield failed to load")
 
 local W = Rayfield:CreateWindow({
-    Name = "Duck Duck Goose | v4.3",
+    Name = "Duck Duck Hub",
     LoadingTitle = "Loading...",
-    LoadingSubtitle = "input safe + panic button",
+    LoadingSubtitle = "Made With Love",
     ConfigurationSaving = { Enabled = false },
     Discord = { Enabled = false },
     KeySystem = false,
@@ -154,7 +154,6 @@ local function newClickThroughGui(name)
     g.ResetOnSpawn = false
     g.IgnoreGuiInset = false
     g.DisplayOrder = 0
-    -- These two make the WHOLE ScreenGui click-through in most executors
     pcall(function() g.Enabled = true end)
     g.Parent = parent
     table.insert(ddgGuis, g)
@@ -166,7 +165,7 @@ do
     if g then
         local l = Instance.new("TextLabel")
         l.Size = UDim2.new(0, 300, 0, 44)
-        l.Position = UDim2.new(0, 8, 0, 8)          -- top-LEFT so it never overlaps top-right game buttons
+        l.Position = UDim2.new(0, 8, 0, 8)
         l.BackgroundColor3 = Color3.fromRGB(20,20,20)
         l.BackgroundTransparency = 0.4
         l.TextColor3 = Color3.fromRGB(255,255,255)
@@ -730,29 +729,23 @@ end })
 MiscT:CreateSection("Panic / Cleanup")
 
 local function panicStopAll()
-    -- Turn off every flag we know about
     local flags = {"AuOn","ATEnabled","AutoEvade","SpdOn","FlyOn","FlyJump","InfJmp","Noclip","AntiAFK","DashSpam","CustomSpam"}
     for _, f in ipairs(flags) do
         pcall(function() RF[f] = false end)
     end
-    -- Force stop all running systems
     pcall(stopFly)
     pcall(stopSpeed)
     pcall(stopFlyJump)
     pcall(stopInfJump)
-    -- Clear PlatformStand on current character
     local h = hum()
     if h then h.PlatformStand = false end
-    -- Remove aura ring
     if auVis then auVis:Destroy(); auVis = nil end
-    -- Restore collision on all character parts (in case Noclip got stuck)
     local c = LP.Character
     if c then
         for _, p in ipairs(c:GetDescendants()) do
             if p:IsA("BasePart") then p.CanCollide = true end
         end
     end
-    -- Reset FOV / camera
     local cam = workspace.CurrentCamera
     if cam then
         cam.FieldOfView = 70
@@ -809,7 +802,6 @@ end)
 
 if not OK then
     warn("[DDG ERROR]", ERR)
-    -- Force-clear PlatformStand so the character isn't frozen by a failed script
     pcall(function()
         local lp = game:GetService("Players").LocalPlayer
         local c = lp.Character
