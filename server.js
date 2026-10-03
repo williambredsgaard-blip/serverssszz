@@ -1449,29 +1449,32 @@ app.get("/", (req, res) => {
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   }
 
-  /* ── Ad container: centered + max-width so AdSense fills it on desktop ── */
-  .ad-wrap{
+  /* ── Promo slot: neutrally-named so uBlock/EasyList do NOT cosmetic-filter it.
+        Reserves real height so no layout jump when AdSense fills or collapses. ── */
+  .promo-slot{
     width:100%;
-    max-width:970px;              /* keeps AdSense within its renderable width */
-    margin:24px auto 0;           /* centers horizontally */
+    max-width:970px;
+    margin:24px auto 0;
     padding:14px;
     background:rgba(28,28,34,0.4);
     border:1px solid rgba(70,70,82,0.5);
     border-radius:14px;
     text-align:center;
-    min-height:100px;
+    min-height:120px;
     backdrop-filter:blur(8px);
     -webkit-backdrop-filter:blur(8px);
+    overflow:hidden;
+    contain:layout;
   }
-  .ad-label{
+  .promo-tag{
     font-size:10px;color:#5a5a6a;text-transform:uppercase;
     letter-spacing:1.2px;font-weight:600;margin-bottom:8px;
   }
-  /* Force the AdSense element to be block-level and reserve height */
-  .ad-wrap .adsbygoogle{
+  .promo-slot .adsbygoogle{
     display:block !important;
     width:100%;
     min-height:90px;
+    background:transparent;
   }
 
   @media (max-width:640px){
@@ -1506,11 +1509,10 @@ app.get("/", (req, res) => {
     .name{font-size:13px}
     .game{font-size:11px}
 
-    /* ad stays full width on mobile */
-    .ad-wrap{
+    .promo-slot{
       max-width:100%;
       margin-top:16px;
-      min-height:80px;
+      min-height:100px;
     }
   }
 </style></head>
@@ -1550,19 +1552,18 @@ app.get("/", (req, res) => {
 
     <div class="grid" id="grid"><div class="empty">No clients connected</div></div>
 
-    <div class="ad-wrap">
-      <div class="ad-label">Advertisement</div>
+    <div class="promo-slot" id="promoSlot">
+      <div class="promo-tag">Sponsored</div>
       <!--
-        Replace the data-ad-slot value below with your real AdSense ad unit ID.
-        "0000000000" is a placeholder and will never serve an ad.
+        Replace data-ad-slot with your real AdSense ad unit ID.
+        "0000000000" is a placeholder and will never serve a real ad.
       -->
       <ins class="adsbygoogle"
-           style="display:block"
+           style="display:block;width:100%;min-height:90px"
            data-ad-client="ca-pub-4246726390307705"
            data-ad-slot="0000000000"
            data-ad-format="auto"
            data-full-width-responsive="true"></ins>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
     </div>
   </div>
 <script>
@@ -1607,6 +1608,15 @@ const FB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns=
     requestAnimationFrame(tk)
   }
   tk()
+})();
+
+// AdSense push — wrapped so a throw can never kill the client-list renderer below.
+(function(){
+  try {
+    (window.adsbygoogle = window.adsbygoogle || []).push({});
+  } catch (e) {
+    // AdSense not ready / blocked — safe to ignore, layout keeps its reserved height.
+  }
 })();
 
 async function rf(){
