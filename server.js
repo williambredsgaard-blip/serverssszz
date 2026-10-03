@@ -394,6 +394,26 @@ app.get("/", (req, res) => {
     -webkit-background-clip:text;background-clip:text;color:transparent;
     letter-spacing:0.3px}
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
+
+  /* ── Discord icon (top-left) ── */
+  .brand{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+  .discord-link{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;border-radius:12px;
+    background:rgba(88,101,242,0.12);
+    border:1px solid rgba(88,101,242,0.35);
+    transition:transform .15s ease, background .2s, border-color .2s, box-shadow .2s;
+    flex-shrink:0;text-decoration:none;
+  }
+  .discord-link:hover{
+    background:rgba(88,101,242,0.25);
+    border-color:rgba(88,101,242,0.7);
+    transform:translateY(-2px);
+    box-shadow:0 6px 20px rgba(88,101,242,0.35);
+  }
+  .discord-link img{width:30px;height:30px;display:block;border-radius:6px;object-fit:contain}
+  .title-block{min-width:0}
+
   .header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px}
   .stats{display:flex;gap:10px;flex-wrap:wrap}
   .stat{
@@ -425,7 +445,12 @@ app.get("/", (req, res) => {
   .http{background:rgba(58,47,30,0.8);color:#ddd47f;border:1px solid rgba(221,212,127,0.2)}
   .empty{color:#666;padding:60px 20px;text-align:center;grid-column:1/-1;
     background:rgba(28,28,34,0.4);border:1px dashed rgba(70,70,82,0.5);border-radius:12px}
-  @media (max-width:520px){.grid{grid-template-columns:1fr}h1{font-size:18px}}
+  @media (max-width:520px){
+    .grid{grid-template-columns:1fr}
+    h1{font-size:18px}
+    .discord-link{width:38px;height:38px}
+    .discord-link img{width:26px;height:26px}
+  }
 </style></head>
 <body>
   <canvas id="bg"></canvas>
@@ -437,9 +462,17 @@ app.get("/", (req, res) => {
 
   <div class="content">
     <div class="header">
-      <div>
-        <h1>Delta Hub Dashboard</h1>
-        <div class="sub">Live view of every client running the hub script</div>
+      <div class="brand">
+        <a class="discord-link" href="https://discord.gg/pZJnYzE7hb" target="_blank" rel="noopener noreferrer" title="Join our Discord">
+          <img
+            src="https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1454.png"
+            alt="Discord"
+            onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/gh/williambredsgaard-blip/serverssszz@main/IMG_1454.png';">
+        </a>
+        <div class="title-block">
+          <h1>Delta Hub Dashboard</h1>
+          <div class="sub">Live view of every client running the hub script</div>
+        </div>
       </div>
       <div class="stats">
         <div class="stat"><div class="label">Executions</div><div class="value accent" id="exec">0</div></div>
