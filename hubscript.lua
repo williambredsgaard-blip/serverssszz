@@ -350,6 +350,68 @@ local function startFly()
 end
 
 -- ═══════════════════════════════════════════════════════════════
+--  WALK FLING
+--  Adapted from Infinite Yield's walkfling command.
+--  Slams the character's Velocity to an absurd value for one frame,
+--  resets it, then adds a tiny vertical nudge every cycle. Anything
+--  welded or in contact with the character receives the replicated
+--  force before the reset lands — that's the fling.
+-- ═══════════════════════════════════════════════════════════════
+local WalkFling = { on = false, thread = nil }
+
+local function stopWalkFling()
+    WalkFling.on = false
+    WalkFling.thread = nil
+    local char = LP.Character
+    if char then
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = true end
+        end
+    end
+end
+
+local function walkFlingLoop()
+    while WalkFling.on do
+        RunService.Heartbeat:Wait()
+        if not WalkFling.on then break end
+
+        local character = LP.Character
+        if not character or not character.Parent then continue end
+
+        local root = character:FindFirstChild("HumanoidRootPart")
+        if not root or not root.Parent then continue end
+
+        -- noclip while flinging so we don't snag on walls
+        for _, p in ipairs(character:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then
+                p.CanCollide = false
+            end
+        end
+
+        local vel = root.Velocity
+        root.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
+
+        RunService.RenderStepped:Wait()
+        if not WalkFling.on then break end
+        if character.Parent and root.Parent then
+            root.Velocity = vel
+        end
+
+        RunService.Stepped:Wait()
+        if not WalkFling.on then break end
+        if character.Parent and root.Parent then
+            root.Velocity = vel + Vector3.new(0, 0.1, 0)
+        end
+    end
+end
+
+local function startWalkFling()
+    if WalkFling.on then return end
+    WalkFling.on = true
+    WalkFling.thread = spawnTask(walkFlingLoop)
+end
+
+-- ═══════════════════════════════════════════════════════════════
 --  ANTI-AFK
 -- ═══════════════════════════════════════════════════════════════
 local antiAfkConn = nil
@@ -642,6 +704,11 @@ Toggle(mainTab, "Full Bright", false, function(on)
     end
 end)
 
+Section(mainTab, "Combat")
+Toggle(mainTab, "Walk Fling", false, function(on)
+    if on then startWalkFling() else stopWalkFling() end
+end)
+
 -- ── Movement ──
 Section(moveTab, "Speed")
 Toggle(moveTab, "Fast Walk (100)", false, function(on)
@@ -695,7 +762,7 @@ Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,70),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.5.4\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
+    Text="Universal Hub v3.5.4\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Walk Fling.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
