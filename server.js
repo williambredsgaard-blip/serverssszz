@@ -396,7 +396,7 @@ app.get("/", (req, res) => {
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
 
   /* ── Discord icon (top-left) ── */
-  .brand{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+  .brand{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px}
   .discord-link{
     display:inline-flex;align-items:center;justify-content:center;
     width:44px;height:44px;border-radius:12px;
@@ -404,6 +404,7 @@ app.get("/", (req, res) => {
     border:1px solid rgba(88,101,242,0.35);
     transition:transform .15s ease, background .2s, border-color .2s, box-shadow .2s;
     flex-shrink:0;text-decoration:none;
+    margin-top:4px;
   }
   .discord-link:hover{
     background:rgba(88,101,242,0.25);
@@ -448,7 +449,7 @@ app.get("/", (req, res) => {
   @media (max-width:520px){
     .grid{grid-template-columns:1fr}
     h1{font-size:18px}
-    .discord-link{width:38px;height:38px}
+    .discord-link{width:38px;height:38px;margin-top:3px}
     .discord-link img{width:26px;height:26px}
   }
 </style></head>
