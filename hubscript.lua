@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.5.2  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
+--  Universal Hub v3.5.3  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -25,9 +25,6 @@ local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
 local gethui     = gethui or (syn and syn.protect_gui and function() end) or nil
 
--- ─── URL fetcher with fallbacks ───
--- Tries game:HttpGet first (fast, native), then request() if the executor
--- blocks HttpGet to non-whitelisted domains.
 local function fetchUrl(url)
     local ok, body = pcall(function() return game:HttpGet(url) end)
     if ok and type(body) == "string" and body ~= "" then return body end
@@ -58,6 +55,10 @@ local function tw(o,info,props) local t=TweenService:Create(o,info,props); t:Pla
 local QI = TweenInfo.new(0.15, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
+-- Safe wrappers for task.spawn / task.wait (some mobile executors lack task lib)
+local spawnTask = (task and task.spawn) or (coroutine and function(fn, ...) coroutine.wrap(fn)(...) end) or function(fn, ...) fn(...) end
+local waitTask  = (task and task.wait) or wait
+
 -- Window
 local gui = C("ScreenGui",{Name="UniversalHub",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
 local shadow = C("Frame",{BackgroundColor3=T.Shadow,BackgroundTransparency=1,Size=UDim2.new(0,440,0,320),Position=UDim2.new(0.5,-220,0.5,-146),ZIndex=0,Parent=gui})
@@ -69,7 +70,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.2",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.3",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -150,13 +151,13 @@ local function makeTab(name)
         local now = tick()
         if now - lastTabFire < 0.3 then return end
         lastTabFire = now
-        select()
+        pcall(select)
     end
     btn.Activated:Connect(trySelect)
     btn.MouseButton1Click:Connect(trySelect)
     btn.MouseEnter:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.1}) end)
     btn.MouseLeave:Connect(function() if page.Visible then return end; tw(btn, QI, {BackgroundTransparency=0.3}) end)
-    if #pages == 1 then select() end
+    if #pages == 1 then pcall(select) end
     return scroll
 end
 
@@ -202,7 +203,11 @@ local function Toggle(parent, name, default, cb)
         local now = tick()
         if now - lastFire < 0.3 then return end
         lastFire = now
-        state = not state; render(); if cb then pcall(cb, state) end
+        state = not state; render()
+        if cb then
+            local ok, err = pcall(cb, state)
+            if not ok then warn("[Toggle] '"..name.."' callback error:", err) end
+        end
     end
     b.Activated:Connect(tryFire)
     b.MouseButton1Click:Connect(tryFire)
@@ -221,10 +226,13 @@ local function Button(parent, name, cb)
         local now = tick()
         if now - lastFire < 0.3 then return end
         lastFire = now
-        if cb then pcall(cb) end
+        if cb then
+            local ok, err = pcall(cb)
+            if not ok then warn("[Button] '"..name.."' callback error:", tostring(err)) end
+        end
     end
-    b.Activated:Connect(tryFire)        -- fires on both PC click and mobile tap
-    b.MouseButton1Click:Connect(tryFire) -- backup for executors that don't fire Activated
+    b.Activated:Connect(tryFire)
+    b.MouseButton1Click:Connect(tryFire)
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -249,7 +257,7 @@ local function applyTraits(char)
 end
 
 LP.CharacterAdded:Connect(function(char)
-    task.wait(0.4)
+    waitTask(0.4)
     applyTraits(char)
 end)
 
@@ -337,7 +345,7 @@ local function startFly()
     end)
 
     flyRefs.charConn = LP.CharacterAdded:Connect(function()
-        task.wait(1)
+        waitTask(1)
         if TRAITS.flyOn then startFly() end
     end)
 end
@@ -463,9 +471,9 @@ local function refreshESP()
     end
 end
 
-task.spawn(function()
+spawnTask(function()
     while true do
-        task.wait(1)
+        waitTask(1)
         if ESP.on then pcall(refreshESP) end
     end
 end)
@@ -477,73 +485,81 @@ Players.PlayerRemoving:Connect(function(plr)
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  TABS  (Games first)
+--  TABS
 -- ═══════════════════════════════════════════════════════════════
-
--- ── Games (first tab) ──
 local gamesTab = makeTab("Games")
+local mainTab = makeTab("Main")
+local moveTab = makeTab("Movement")
+local espTab  = makeTab("ESP")
+local aboutTab= makeTab("About")
 
+-- ── Games ──
 Section(gamesTab, "Game Scripts")
 
 local ddgLoading = false
 Button(gamesTab, "Duck Duck (TAG) Script", function()
-    print("[Games] DDG button clicked")
+    -- This is step 1 — if you don't see this in F9, the click handler is broken.
+    warn("[Games] 1. Button clicked")
+
     if ddgLoading then
-        print("[Games] already loading, ignoring")
-        notify("Games", "Already loading Duck Duck Goose...", T.Warning)
+        warn("[Games] already loading — ignoring")
         return
     end
     ddgLoading = true
-    notify("Games", "Loading Duck Duck Goose script...", T.Accent)
 
-    task.spawn(function()
+    spawnTask(function()
+        warn("[Games] 2. Async task started")
+
         local ok, err = pcall(function()
             local url = RELAY_HTTP .. "/ddg.lua"
-            print("[Games] fetching " .. url)
+            warn("[Games] 3. Fetching: " .. url)
+
             local src = fetchUrl(url)
             if not src or src == "" then
-                error("Empty response from " .. url .. " (both HttpGet and request failed)")
+                error("Empty response from " .. url .. " (HttpGet + request both failed)")
             end
-            print("[Games] got " .. tostring(#src) .. " bytes")
+            warn("[Games] 4. Got " .. tostring(#src) .. " bytes")
 
             local compiler = loadstring or load
             if not compiler then
-                error("No loadstring/load function available in this executor")
+                error("No loadstring/load available in this executor")
             end
-            print("[Games] compiling...")
+
+            warn("[Games] 5. Compiling...")
             local fn = compiler(src)
             if not fn then
-                error("Compilation failed (loadstring returned nil)")
+                error("Compilation failed — loadstring returned nil")
             end
-            print("[Games] executing DDG...")
+
+            warn("[Games] 6. Executing DDG script...")
             fn()
-            print("[Games] DDG finished executing")
+            warn("[Games] 7. DDG script finished executing")
         end)
+
         ddgLoading = false
+
         if ok then
-            notify("Games", "Duck Duck Goose loaded!", T.Good)
+            warn("[Games] DDG loaded successfully")
+            pcall(function() notify("Games", "Duck Duck Goose loaded!", T.Good) end)
         else
-            notify("Games", "Failed: " .. tostring(err), T.Bad)
-            warn("[Games] DDG load error:", err)
+            warn("[Games] DDG failed: " .. tostring(err))
+            pcall(function() notify("Games", "Failed: " .. tostring(err), T.Bad) end)
         end
     end)
+
+    -- Notify last so a notify error can't kill the async task spawn above
+    pcall(function() notify("Games", "Loading Duck Duck Goose script...", T.Accent) end)
 end)
 
 Section(gamesTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,80),
     Font=Enum.Font.Gotham,
-    Text="Loads standalone game-specific hubs.\n\nDuck Duck Goose Hub v4.3 (by their original devs) opens its own Rayfield window once loaded.",
+    Text="Loads standalone game-specific hubs.\n\nDuck Duck Goose Hub v4.3 opens its own Rayfield window once loaded.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=gamesTab,
 })
-
--- ── Original tabs ──
-local mainTab = makeTab("Main")
-local moveTab = makeTab("Movement")
-local espTab  = makeTab("ESP")
-local aboutTab= makeTab("About")
 
 -- ── Main ──
 Section(mainTab, "Global Stats")
@@ -635,13 +651,13 @@ Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.5.2\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
+    Text="Universal Hub v3.5.3\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
 })
 
-task.spawn(function()
+spawnTask(function()
     tw(win, CI, {BackgroundTransparency = 0.15})
     tw(shadow, CI, {BackgroundTransparency = 0.55})
     tw(titleBar, CI, {BackgroundTransparency = 0.15})
@@ -687,7 +703,7 @@ local function setExecDisplay(n)
     end
 end
 
-task.spawn(function()
+spawnTask(function()
     local count = postExecution()
     if count then
         setExecDisplay(count)
@@ -697,7 +713,7 @@ task.spawn(function()
     end
 
     while true do
-        task.wait(15)
+        waitTask(15)
         local read = fetchExecutions()
         if read then setExecDisplay(read) end
     end
@@ -752,7 +768,7 @@ if loadstring then
     local function processMessages(messages)
         for _, data in ipairs(messages or {}) do
             if data.type == "execute" and data.targetUserId == LP.UserId then
-                task.spawn(handleExecute, data)
+                spawnTask(handleExecute, data)
             end
         end
     end
@@ -769,24 +785,24 @@ if loadstring then
             local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
             if not ok2 or not data then return end
             if data.type == "execute" and data.targetUserId == LP.UserId then
-                task.spawn(handleExecute, data)
+                spawnTask(handleExecute, data)
             elseif data.type == "ping" then
                 send({type="pong",userId=LP.UserId})
             end
         end)
         ws.OnClose:Connect(function()
             connected = false
-            task.wait(5)
+            waitTask(5)
             if transport == "ws" then
                 transport = nil
-                task.spawn(startHTTP)
+                spawnTask(startHTTP)
             end
         end)
         return true
     end
     function startHTTP()
         transport = "http"
-        task.spawn(function()
+        spawnTask(function()
             while transport == "http" do
                 local toSend = {}
                 for _, m in ipairs(pendingOut) do table.insert(toSend, m) end
@@ -796,16 +812,16 @@ if loadstring then
                     LP.UserId, HttpService:UrlEncode(LP.DisplayName), game.PlaceId, game.JobId, game.GameId)
                 local data = httpGet(q)
                 if data and data.messages then processMessages(data.messages) end
-                task.wait(2)
+                waitTask(2)
             end
         end)
     end
-    task.spawn(function()
-        for i = 1, 3 do if tryWS() then break end; task.wait(2) end
+    spawnTask(function()
+        for i = 1, 3 do if tryWS() then break end; waitTask(2) end
         if not connected then startHTTP() end
-        task.wait(2)
+        waitTask(2)
         while true do
-            task.wait(10)
+            waitTask(10)
             if connected or transport == "http" then
                 local changed = (game.PlaceId ~= lastPlace) or (game.JobId ~= lastJob)
                 lastPlace, lastJob = game.PlaceId, game.JobId
@@ -821,7 +837,7 @@ if loadstring then
     end)
 
     LP.CharacterAdded:Connect(function()
-        task.wait(2)
+        waitTask(2)
         if connected or transport == "http" then
             send({
                 type = "ping",
