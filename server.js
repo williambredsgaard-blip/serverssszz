@@ -484,7 +484,7 @@ app.get("/nfa", (req, res) => {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:18px;font-weight:600;color:#fff">CS2 Prime Account</div>
         <div style="background:rgba(40,90,60,0.6);border:1px solid rgba(90,220,140,0.4);
-                    color:#7ddd9f;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">● 138</div>
+                    color:#7ddd9f;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">● 3</div>
       </div>
       <div style="color:#8a8a9a;font-size:13px;line-height:1.5;margin-bottom:18px">
         Prime enabled. Premier is not unlocked.
