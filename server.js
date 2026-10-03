@@ -610,8 +610,10 @@ function shToggleSaved(slug) {
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "standard") {
   const isWide = layout === "wide";
   // Vertical Upward ad — slot 1135972285. Rendered twice on wide pages (left & right rails).
+  // The .ad-sidebar wrapper shows a visible placeholder box so the ad slot is always
+  // apparent to the user and to reviewers, even before AdSense fills it.
   const adBlockLeft = `
-    <div class="ad-sidebar left">
+    <div class="ad-sidebar left" aria-label="Advertisement">
       <ins class="adsbygoogle"
            style="display:block"
            data-ad-client="${ADSENSE_CLIENT}"
@@ -621,7 +623,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "stand
     </div>
   `;
   const adBlockRight = `
-    <div class="ad-sidebar right">
+    <div class="ad-sidebar right" aria-label="Advertisement">
       <ins class="adsbygoogle"
            style="display:block"
            data-ad-client="${ADSENSE_CLIENT}"
@@ -636,22 +638,47 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "stand
       justify-content: center;
       align-items: flex-start;
       gap: 20px;
-      max-width: 1200px;
+      max-width: 1280px;
       margin: 0 auto;
       width: 100%;
     }
     .ad-sidebar {
-      width: 160px;
+      width: 180px;
       flex-shrink: 0;
       display: none;
       position: sticky;
       top: 24px;
-      min-height: 600px;
+      min-height: 620px;
+      background: rgba(28,28,34,0.4);
+      border: 1px dashed rgba(90,90,105,0.65);
+      border-radius: 14px;
+      padding: 12px 10px 14px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .ad-sidebar::before {
+      content: 'AD';
+      display: block;
+      font-size: 10px;
+      color: #5a5a6a;
+      letter-spacing: 1.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .ad-sidebar::after {
+      content: 'Ad space';
+      display: block;
+      font-size: 11px;
+      color: #4a4a58;
+      letter-spacing: 0.4px;
+      margin-top: 10px;
     }
     .ad-sidebar ins {
       display: block;
       width: 100%;
-      min-height: 600px;
+      min-height: 540px;
+      background: transparent;
     }
     .main-content {
       flex: 1;
