@@ -19,13 +19,8 @@ const STALE_MS = 5_000;
 const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY;
 const PRODUCT_PRICE_USD = 0.87;
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
-
-// Required confirmations per coin.
-// Blockonomics callbacks fire at status 2 for both BTC and USDT.
 const REQUIRED_CONFIRMATIONS = 2;
-
 const STORE_CALLBACK = "https://serverssszz.onrender.com/webhook/blockonomics";
-const CALLBACK_SECRET = process.env.BLOCKONOMICS_CALLBACK_SECRET || "script-hub-callback-secret";
 
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
 
@@ -215,7 +210,6 @@ function blockonomicsGet(pathname) {
   });
 }
 
-// Per Blockonomics docs, `crypto` must be a QUERY STRING parameter, not in the body.
 async function createPaymentAddress(coin) {
   const qs = "?match_callback=" + encodeURIComponent(STORE_CALLBACK) + "&crypto=" + encodeURIComponent(coin);
   const data = await blockonomicsPost("/api/new_address" + qs, {});
@@ -247,8 +241,6 @@ async function getCryptoPriceUsd(coin) {
 }
 
 // ─── PAYMENT CHECK ───
-// BTC is polled via mempool.space (fast, free).
-// USDT requires the Web3 component to submit a txhash which we save on the order.
 async function checkOrderPayment(order) {
   if (order.status === "paid") {
     return { status: "paid", confirmations: order.confirmations || REQUIRED_CONFIRMATIONS, txid: order.txid, keys: order.assignedKeys };
@@ -281,7 +273,6 @@ async function checkOrderPayment(order) {
     } catch (e) { return { status: "pending", confirmations: 0 }; }
   }
 
-  // USDT — waits for the Web3 component to submit a txhash first
   if (!order.txid) {
     return { status: "waiting-wallet", confirmations: 0 };
   }
@@ -474,6 +465,11 @@ function topNav(active) {
 // ─── /nfa ───
 app.get("/nfa", (req, res) => {
   const available = availableStock().length;
+  const stockColor = available > 0
+    ? "background:rgba(40,90,60,0.6);border:1px solid rgba(90,220,140,0.4);color:#7ddd9f;"
+    : "background:rgba(90,40,40,0.6);border:1px solid rgba(220,90,90,0.4);color:#ff9a9a;";
+  const stockText = available > 0 ? (available + " in stock") : "Out of stock";
+
   const html = pageShell("NFA Loader — Script Hub", `
     ${topNav('nfa')}
     <div class="tag">NFA ACCOUNTS</div>
@@ -483,8 +479,7 @@ app.get("/nfa", (req, res) => {
     <div class="card" style="max-width:480px;border-color:rgba(200,60,60,0.5)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:18px;font-weight:600;color:#fff">CS2 Prime Account</div>
-        <div style="background:rgba(40,90,60,0.6);border:1px solid rgba(90,220,140,0.4);
-                    color:#7ddd9f;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">● 3</div>
+        <div style="${stockColor}padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">● ${stockText}</div>
       </div>
       <div style="color:#8a8a9a;font-size:13px;line-height:1.5;margin-bottom:18px">
         Prime enabled. Premier is not unlocked.
@@ -499,9 +494,6 @@ app.get("/nfa", (req, res) => {
                 font-size:20px;padding:12px 22px;cursor:pointer">+</button>
       </div>
       <button class="btn" onclick="goCart()">Add to cart →</button>
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:#8a8a9a">
-        ${available} account${available !== 1 ? "s" : ""} in stock
-      </div>
     </div>
 
     <script>
@@ -670,18 +662,17 @@ app.get("/pay/:orderId", (req, res) => {
         <div style="margin-top:20px;padding:16px;background:rgba(38,161,123,0.1);
                     border:1px solid rgba(38,161,123,0.35);border-radius:12px;
                     color:#a8d9c8;font-size:13px;line-height:1.6">
-          <b style="color:#4fcf9b;display:block;margin-bottom:6px">USDT requires a browser wallet</b>
-          USDT on Ethereum is an ERC-20 token — it can't be sent from a normal exchange withdrawal to this address.
-          Open this page in a browser with the <b>Chui Wallet</b> extension installed, or a WalletConnect-compatible wallet,
-          then use the button below.
-          <button onclick="connectWallet()" style="margin-top:14px;width:100%;padding:12px;
-                  background:linear-gradient(135deg,#26a17b,#4fcf9b);color:#fff;
-                  font-weight:600;font-size:14px;border:none;border-radius:8px;cursor:pointer;font-family:inherit">
-            Connect Wallet &amp; Pay ${order.cryptoAmount} USDT
-          </button>
+          <b style="color:#4fcf9b;display:block;margin-bottom:6px">Pay USDT with a browser wallet</b>
+          USDT is an ERC-20 token on Ethereum. You'll need Chui Wallet or any WalletConnect-compatible
+          browser wallet to sign the transfer. Use the widget below.
+          <div id="usdt-widget-wrap" style="margin-top:14px"></div>
           <div id="walletStatus" style="margin-top:10px;font-size:12px;color:#8a8a9a"></div>
         </div>
   ` : '';
+
+  const widgetScript = isUSDT
+    ? `<script src="https://blockonomics.co/js/web3-payment.js"></script>`
+    : '';
 
   const html = pageShell(`Pay ${order.cryptoAmount} ${coinSymbol}`, `
     ${topNav('nfa')}
@@ -796,13 +787,9 @@ app.get("/pay/:orderId", (req, res) => {
           if (i < n) d.classList.add('filled');
           else d.classList.remove('filled');
         });
-        if (n === 0) {
-          document.getElementById('confCount').textContent = '';
-        } else if (n >= REQUIRED) {
-          document.getElementById('confCount').textContent = 'Confirmed';
-        } else {
-          document.getElementById('confCount').textContent = n + ' confirmation' + (n === 1 ? '' : 's');
-        }
+        if (n === 0) document.getElementById('confCount').textContent = '';
+        else if (n >= REQUIRED) document.getElementById('confCount').textContent = 'Confirmed';
+        else document.getElementById('confCount').textContent = n + ' confirmation' + (n === 1 ? '' : 's');
       }
 
       function showKeys(keys){
@@ -826,18 +813,38 @@ app.get("/pay/:orderId", (req, res) => {
         setTimeout(() => el.textContent = old, 1200);
       };
 
-      // USDT requires the Web3 component. This is a placeholder that
-      // tells the user what they need. When Blockonomics' Chui Wallet
-      // script is wired in, replace this with the real invoke.
-      window.connectWallet = function(){
-        const el = document.getElementById('walletStatus');
-        el.textContent = 'Opening wallet...';
-        el.style.color = '#e8c07a';
-        setTimeout(() => {
-          el.textContent = 'USDT wallet integration requires the Blockonomics Web3 component on this page. See docs: developers.blockonomics.co/docs/guides/web3-usdt-component';
-          el.style.color = '#ff7a7a';
-        }, 800);
-      };
+      if (IS_USDT) {
+        (function initUsdt() {
+          const wrap = document.getElementById('usdt-widget-wrap');
+          if (!wrap) return;
+          const w = document.createElement('web3-payment');
+          w.id = 'web3_payment';
+          w.setAttribute('order_amount', ${JSON.stringify(order.cryptoAmount)});
+          w.setAttribute('receive_address', ${JSON.stringify(order.address)});
+          wrap.appendChild(w);
+
+          function bind() {
+            const el = document.getElementById('web3_payment');
+            if (!el) return;
+            el.onTxnSubmitted = function(result) {
+              const { txhash, crypto } = result || {};
+              const status = document.getElementById('walletStatus');
+              if (status) status.textContent = 'Transaction submitted: ' + (txhash || '');
+              document.getElementById('confStatus').textContent = 'Transaction submitted. Waiting for confirmations...';
+              fetch('/monitor-usdt/' + ORDER_ID, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ txhash, crypto })
+              }).then(() => poll()).catch(() => {});
+            };
+          }
+          if (window.customElements && customElements.whenDefined) {
+            customElements.whenDefined('web3-payment').then(bind);
+          } else {
+            setTimeout(bind, 500);
+          }
+        })();
+      }
 
       async function poll(){
         if(cancelled || paid) return;
@@ -869,7 +876,7 @@ app.get("/pay/:orderId", (req, res) => {
             paintConfirmations(data.confirmations || 0);
           } else if (data.status === 'waiting-wallet'){
             document.getElementById('confStatus').textContent = IS_USDT
-              ? 'Waiting for you to connect a wallet and send USDT...'
+              ? 'Waiting for you to send USDT from your wallet...'
               : 'Waiting for payment...';
           } else {
             document.getElementById('confStatus').textContent = 'Waiting for payment...';
@@ -897,6 +904,7 @@ app.get("/pay/:orderId", (req, res) => {
         document.getElementById('modal').style.display='flex';
       }
     </script>
+    ${widgetScript}
   `);
   res.set("Content-Type", "text/html").send(html);
 });
@@ -916,14 +924,39 @@ app.post("/cancel/:orderId", (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── /monitor-usdt/:orderId ───
+app.post("/monitor-usdt/:orderId", async (req, res) => {
+  const order = orders.get(req.params.orderId);
+  if (!order) return res.status(404).json({ ok: false, error: "order not found" });
+
+  const { txhash } = req.body || {};
+  if (!txhash) return res.status(400).json({ ok: false, error: "missing txhash" });
+
+  order.txid = txhash;
+  console.log(`[usdt] ${order.id} txhash recorded: ${txhash}`);
+
+  try {
+    await blockonomicsPost("/api/monitor_tx", {
+      txhash,
+      crypto: "USDT",
+      addr: order.address,
+    });
+    console.log(`[usdt] ${order.id} registered with Blockonomics monitor`);
+  } catch (e) {
+    console.error("[usdt] monitor registration failed:", e.message);
+  }
+
+  res.json({ ok: true });
+});
+
 // ─── /webhook/blockonomics ───
 app.get("/webhook/blockonomics", (req, res) => {
-  const orderId = req.query.order;
   const addr = req.query.addr;
   const status = parseInt(req.query.status, 10);
   const txid = req.query.txid;
+  const crypto = req.query.crypto || "BTC";
 
-  console.log(`[webhook] addr=${addr} status=${status} txid=${txid}`);
+  console.log(`[webhook] addr=${addr} crypto=${crypto} status=${status} txid=${txid}`);
 
   if (addr) {
     for (const [id, order] of orders) {
@@ -1049,7 +1082,7 @@ app.post("/redeem", (req, res) => {
   res.json({ ok: true, credential: item.credential });
 });
 
-// ─── ROBLOX RELAY (WebSocket) ───
+// ─── ROBLOX RELAY ───
 function userListPayload() {
   const users = [];
   for (const [ws, info] of wsClients) if (info.userId) users.push({ ...info, transport: "ws" });
@@ -1184,50 +1217,173 @@ app.get("/", (req, res) => {
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4246726390307705" crossorigin="anonymous"></script>
 <style>
   *{box-sizing:border-box}
-  html,body{height:100%}
-  body{background:#0b0b10;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:24px;position:relative;overflow-x:hidden;min-height:100vh}
+  html{overflow-x:hidden}
+  html,body{height:100%;margin:0}
+  body{
+    background:#0b0b10;color:#eee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:24px 24px 40px;position:relative;overflow-x:hidden;min-height:100vh;
+  }
   #bg{position:fixed;inset:0;z-index:0;pointer-events:none}
   .orb{position:fixed;border-radius:50%;filter:blur(90px);opacity:0.35;z-index:0;pointer-events:none}
   .orb1{width:480px;height:480px;background:#7850ff;top:-140px;left:-140px}
   .orb2{width:560px;height:560px;background:#2f8fff;bottom:-180px;right:-160px}
   .orb3{width:360px;height:360px;background:#ff4fa0;top:40%;left:55%;opacity:0.18}
-  .scanline{position:fixed;inset:0;z-index:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 3px);mix-blend-mode:overlay}
-  .vignette{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%)}
-  .content{position:relative;z-index:1}
-  h1{font-size:22px;margin:0 0 4px;color:#fff;background:linear-gradient(90deg,#fff,#b9a3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .scanline{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 3px);
+    mix-blend-mode:overlay
+  }
+  .vignette{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%)
+  }
+
+  .content{position:relative;z-index:1;width:100%;max-width:1500px;margin:0 auto}
+
+  h1{
+    font-size:22px;margin:0 0 4px;color:#fff;
+    background:linear-gradient(90deg,#fff,#b9a3ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
-  .topnav{display:flex;align-items:center;gap:14px;margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid rgba(70,70,82,0.4)}
-  .topnav-icons{display:flex;gap:10px}
-  .topnav-icons a{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;text-decoration:none;transition:transform .15s,background .2s}
+
+  .topnav{
+    display:flex;align-items:center;gap:14px;
+    margin-bottom:22px;padding-bottom:16px;
+    border-bottom:1px solid rgba(70,70,82,0.4);
+  }
+  .topnav-icons{display:flex;gap:10px;flex-shrink:0}
+  .topnav-icons a{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:42px;height:42px;border-radius:12px;text-decoration:none;
+    transition:transform .15s,background .2s
+  }
   .topnav-icons a.discord{background:rgba(88,101,242,0.12);border:1px solid rgba(88,101,242,0.35)}
   .topnav-icons a.discord:hover{background:rgba(88,101,242,0.25);transform:translateY(-2px)}
   .topnav-icons a.steam{background:rgba(27,40,56,0.5);border:1px solid rgba(103,150,200,0.35)}
   .topnav-icons a.steam:hover{background:rgba(27,40,56,0.8);transform:translateY(-2px)}
   .topnav-icons img{width:28px;height:28px;border-radius:6px;object-fit:contain}
-  .topnav-tabs{display:flex;gap:6px;margin-left:auto}
-  .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s}
+  .topnav-tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .topnav-tabs a{
+    padding:9px 18px;border-radius:10px;text-decoration:none;
+    color:#a8a8b8;font-size:13px;font-weight:600;white-space:nowrap;
+    transition:background .15s,color .15s
+  }
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
   .topnav-tabs a.active{background:rgba(255,255,255,0.08);color:#fff}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px}
+
+  .header{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    flex-wrap:wrap;gap:16px;margin-bottom:20px;
+  }
   .stats{display:flex;gap:10px;flex-wrap:wrap}
-  .stat{background:rgba(28,28,34,0.7);backdrop-filter:blur(12px);border:1px solid rgba(70,70,82,0.7);padding:10px 16px;border-radius:12px;min-width:110px}
-  .stat .label{font-size:10px;color:#8a8a9a;text-transform:uppercase;letter-spacing:1px;font-weight:600}
+  .stat{
+    background:rgba(28,28,34,0.7);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(70,70,82,0.7);
+    padding:10px 16px;border-radius:12px;min-width:110px;
+  }
+  .stat .label{
+    font-size:10px;color:#8a8a9a;text-transform:uppercase;
+    letter-spacing:1px;font-weight:600;
+  }
   .stat .value{font-size:22px;font-weight:700;color:#fff;margin-top:2px}
   .stat .value.accent{color:#b9a3ff}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;max-width:1200px}
-  .card{background:rgba(28,28,34,0.65);backdrop-filter:blur(12px);border:1px solid rgba(70,70,82,0.6);border-radius:12px;padding:14px;display:flex;gap:12px;align-items:center;transition:transform .15s,border-color .2s}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+    gap:14px;
+    width:100%;
+    min-height:360px;
+  }
+  .card{
+    background:rgba(28,28,34,0.65);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(70,70,82,0.6);
+    border-radius:12px;padding:16px;
+    display:flex;gap:14px;align-items:center;
+    transition:transform .15s,border-color .2s;
+    min-width:0;
+  }
   .card:hover{transform:translateY(-2px);border-color:rgba(120,90,255,0.6)}
-  .av{width:56px;height:56px;border-radius:10px;background:#2a2a34;flex-shrink:0;border:1px solid rgba(120,90,255,0.25);object-fit:cover;display:block}
+  .av{
+    width:60px;height:60px;border-radius:10px;background:#2a2a34;
+    flex-shrink:0;border:1px solid rgba(120,90,255,0.25);
+    object-fit:cover;display:block;
+  }
   .meta{min-width:0;flex:1}
-  .name{font-weight:600;color:#fff;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .game{color:#9a9aaa;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;margin-top:6px}
+  .name{
+    font-weight:600;color:#fff;font-size:14px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .game{
+    color:#9a9aaa;font-size:12px;margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .badge{
+    display:inline-block;padding:2px 8px;border-radius:10px;
+    font-size:10px;font-weight:600;text-transform:uppercase;margin-top:6px;
+  }
   .ws{background:rgba(30,58,42,0.8);color:#7ddd9f}
   .http{background:rgba(58,47,30,0.8);color:#ddd47f}
-  .empty{color:#666;padding:60px 20px;text-align:center;grid-column:1/-1;background:rgba(28,28,34,0.4);border:1px dashed rgba(70,70,82,0.5);border-radius:12px}
-  .ad-wrap{max-width:1200px;margin-top:24px;padding:14px;background:rgba(28,28,34,0.4);border:1px solid rgba(70,70,82,0.5);border-radius:12px;text-align:center;min-height:100px}
-  .ad-label{font-size:10px;color:#5a5a6a;text-transform:uppercase;letter-spacing:1.2px;font-weight:600;margin-bottom:8px}
-  @media (max-width:520px){.grid{grid-template-columns:1fr}.topnav{flex-wrap:wrap}.topnav-tabs{margin-left:0;width:100%}.topnav-tabs a{flex:1;text-align:center}}
+
+  .empty{
+    grid-column:1/-1;
+    display:flex;align-items:center;justify-content:center;
+    min-height:360px;
+    color:#666;font-size:14px;text-align:center;
+    background:rgba(28,28,34,0.4);
+    border:1px dashed rgba(70,70,82,0.5);
+    border-radius:12px;
+  }
+
+  .ad-wrap{
+    width:100%;margin-top:24px;padding:14px;
+    background:rgba(28,28,34,0.4);
+    border:1px solid rgba(70,70,82,0.5);
+    border-radius:12px;text-align:center;min-height:100px;
+  }
+  .ad-label{
+    font-size:10px;color:#5a5a6a;text-transform:uppercase;
+    letter-spacing:1.2px;font-weight:600;margin-bottom:8px;
+  }
+
+  @media (max-width:640px){
+    body{padding:16px 16px 32px}
+    .content{max-width:100%}
+    h1{font-size:18px}
+    .sub{font-size:12px;margin-bottom:18px}
+
+    .topnav{
+      flex-wrap:wrap;gap:10px;
+      padding-bottom:12px;margin-bottom:16px;
+    }
+    .topnav-tabs{
+      margin-left:0;width:100%;
+      display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+    }
+    .topnav-tabs a{
+      text-align:center;padding:9px 4px;font-size:12px;
+    }
+
+    .header{flex-direction:column;align-items:stretch;gap:12px;margin-bottom:16px}
+    .stats{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .stat{min-width:0;padding:10px 12px}
+    .stat .value{font-size:20px}
+
+    .grid{
+      grid-template-columns:1fr;gap:10px;min-height:220px;
+    }
+    .empty{min-height:220px;font-size:13px}
+    .card{padding:12px;gap:10px}
+    .av{width:48px;height:48px}
+    .name{font-size:13px}
+    .game{font-size:11px}
+
+    .ad-wrap{margin-top:16px;min-height:80px}
+  }
 </style></head>
 <body>
   <canvas id="bg"></canvas>
@@ -1263,7 +1419,7 @@ app.get("/", (req, res) => {
       </div>
     </div>
 
-    <div class="grid" id="grid"><div class="empty">Loading...</div></div>
+    <div class="grid" id="grid"><div class="empty">No clients connected</div></div>
 
     <div class="ad-wrap">
       <div class="ad-label">Advertisement</div>
@@ -1273,15 +1429,69 @@ app.get("/", (req, res) => {
   </div>
 <script>
 const FB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="10" fill="#2a2a34"/><text x="28" y="37" font-family="sans-serif" font-size="24" font-weight="600" fill="#8a8a9a" text-anchor="middle">?</text></svg>');
-(function(){const c=document.getElementById('bg');if(!c)return;const ctx=c.getContext('2d');const D=Math.max(1,devicePixelRatio||1);let W,H;
-function rz(){W=c.width=innerWidth*D;H=c.height=innerHeight*D;c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}rz();addEventListener('resize',rz);
-const N=Math.min(90,Math.max(40,Math.floor(innerWidth/22)));const P=Array.from({length:N},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.25*D,vy:(Math.random()-.5)*.25*D,r:(Math.random()*1.4+.6)*D,h:Math.random()<.5?265:210}));
-const MD=150*D;function tk(){ctx.clearRect(0,0,W,H);for(let i=0;i<P.length;i++){const a=P[i];for(let j=i+1;j<P.length;j++){const b=P[j];const dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy;if(d2<MD*MD){const al=(1-Math.sqrt(d2)/MD)*.22;ctx.strokeStyle='rgba(140,110,255,'+al+')';ctx.lineWidth=.7*D;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}}}
-for(const p of P){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);g.addColorStop(0,'hsla('+p.h+',90%,75%,.9)');g.addColorStop(1,'hsla('+p.h+',90%,75%,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.r*4,0,Math.PI*2);ctx.fill()}requestAnimationFrame(tk)}tk()})();
-async function rf(){try{const r=await fetch('/clients?t='+Date.now());const d=await r.json();const u=d.users||[];document.getElementById('count').textContent=u.length;document.getElementById('exec').textContent=(d.executions??0).toLocaleString();const g=document.getElementById('grid');if(u.length===0){g.innerHTML='<div class="empty">No clients connected</div>';return}
-g.innerHTML=u.map(x=>{const t=x.thumbnail||FB;const b=x.transport==='ws'?'<span class="badge ws">ws</span>':'<span class="badge http">http</span>';const p=x.placeId?('Place '+x.placeId):'Unknown';const n=(x.displayName||('User '+x.userId)).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));return '<div class="card"><img class="av" src="'+t+'" onerror="this.src=\\''+FB+'\\'"><div class="meta"><div class="name">'+n+'</div><div class="game">'+p+'</div>'+b+'</div></div>'}).join('')}
-catch(e){document.getElementById('grid').innerHTML='<div class="empty">Error: '+e.message+'</div>'}}
-rf();setInterval(rf,2000);
+(function(){
+  const c=document.getElementById('bg');if(!c)return;
+  const ctx=c.getContext('2d');const D=Math.max(1,devicePixelRatio||1);let W,H;
+  function rz(){W=c.width=innerWidth*D;H=c.height=innerHeight*D;
+    c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}
+  rz();addEventListener('resize',rz);
+  const N=Math.min(90,Math.max(40,Math.floor(innerWidth/22)));
+  const P=Array.from({length:N},()=>({
+    x:Math.random()*W,y:Math.random()*H,
+    vx:(Math.random()-.5)*.25*D,vy:(Math.random()-.5)*.25*D,
+    r:(Math.random()*1.4+.6)*D,h:Math.random()<.5?265:210
+  }));
+  const MD=150*D;
+  function tk(){
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<P.length;i++){
+      const a=P[i];
+      for(let j=i+1;j<P.length;j++){
+        const b=P[j];const dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy;
+        if(d2<MD*MD){
+          const al=(1-Math.sqrt(d2)/MD)*.22;
+          ctx.strokeStyle='rgba(140,110,255,'+al+')';
+          ctx.lineWidth=.7*D;
+          ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+        }
+      }
+    }
+    for(const p of P){
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1;
+      if(p.y<0||p.y>H)p.vy*=-1;
+      const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+      g.addColorStop(0,'hsla('+p.h+',90%,75%,.9)');
+      g.addColorStop(1,'hsla('+p.h+',90%,75%,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.r*4,0,Math.PI*2);ctx.fill();
+    }
+    requestAnimationFrame(tk)
+  }
+  tk()
+})();
+
+async function rf(){
+  try{
+    const r=await fetch('/clients?t='+Date.now());
+    const d=await r.json();
+    const u=d.users||[];
+    document.getElementById('count').textContent=u.length;
+    document.getElementById('exec').textContent=(d.executions??0).toLocaleString();
+    const g=document.getElementById('grid');
+    if(u.length===0){g.innerHTML='<div class="empty">No clients connected</div>';return}
+    g.innerHTML=u.map(x=>{
+      const t=x.thumbnail||FB;
+      const b=x.transport==='ws'?'<span class="badge ws">ws</span>':'<span class="badge http">http</span>';
+      const p=x.placeId?('Place '+x.placeId):'Unknown';
+      const n=(x.displayName||('User '+x.userId)).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+      return '<div class="card"><img class="av" src="'+t+'" onerror="this.src=\\''+FB+'\\'"><div class="meta"><div class="name">'+n+'</div><div class="game">'+p+'</div>'+b+'</div></div>';
+    }).join('');
+  }catch(e){
+    document.getElementById('grid').innerHTML='<div class="empty">Error: '+e.message+'</div>';
+  }
+}
+rf();
+setInterval(rf,2000);
 </script></body></html>`);
 });
 
