@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.5  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
+--  Universal Hub v3.5.1  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -52,7 +52,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.1",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -445,7 +445,7 @@ local gamesTab = makeTab("Games")
 Section(gamesTab, "Game Scripts")
 
 local ddgLoading = false
-Button(gamesTab, "Duck Duck (TAG) Script", nil, function()
+Button(gamesTab, "Duck Duck (TAG) Script", function()
     if ddgLoading then
         notify("Games", "Already loading Duck Duck Goose...", T.Warning)
         return
@@ -479,7 +479,7 @@ Section(gamesTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,80),
     Font=Enum.Font.Gotham,
-    Text="Loads standalone game-specific hubs.\n\nDuck Duck Goose Hub v4.2 (by their original devs) opens its own Rayfield window once loaded.",
+    Text="Loads standalone game-specific hubs.\n\nDuck Duck Goose Hub v4.3 (by their original devs) opens its own Rayfield window once loaded.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=gamesTab,
@@ -581,7 +581,7 @@ Section(aboutTab, "Info")
 C("TextLabel",{
     BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
     Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.5\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
+    Text="Universal Hub v3.5.1\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left,
     TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
