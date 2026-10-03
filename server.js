@@ -44,11 +44,9 @@ process.on("SIGINT", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(s
 process.on("SIGTERM", () => { try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch {} process.exit(0); });
 
 // ─── Roblox thumbnail proxy (with cache) ───
-// Uses the modern thumbnails.roblox.com API — same one that
-// Players:GetUserThumbnailAsync resolves to under the hood.
-const thumbCache = new Map();          // userId -> { url, at }
-const THUMB_TTL   = 60 * 60 * 1000;    // 1 hour success cache
-const THUMB_NEG_TTL = 60 * 1000;       // 1 min negative cache (not-ready)
+const thumbCache = new Map();
+const THUMB_TTL   = 60 * 60 * 1000;
+const THUMB_NEG_TTL = 60 * 1000;
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -75,7 +73,7 @@ async function getThumbnails(userIds) {
     if (c) {
       const ttl = c.url ? THUMB_TTL : THUMB_NEG_TTL;
       if (now - c.at < ttl) {
-        result[id] = c.url;   // may be null for negative cache
+        result[id] = c.url;
         continue;
       }
     }
@@ -84,7 +82,6 @@ async function getThumbnails(userIds) {
 
   if (missing.length === 0) return result;
 
-  // Roblox allows up to 100 ids per request
   const chunk = missing.slice(0, 100);
   try {
     const data = await fetchJson(
@@ -101,12 +98,10 @@ async function getThumbnails(userIds) {
           result[uid] = entry.imageUrl;
           thumbCache.set(uid, { url: entry.imageUrl, at: now });
         } else {
-          // Pending or unavailable — cache negative for 1 min
           result[uid] = null;
           thumbCache.set(uid, { url: null, at: now });
         }
       }
-      // Any id the API didn't mention at all — mark negative
       for (const uid of chunk) {
         if (!seen.has(uid)) {
           result[uid] = null;
@@ -122,7 +117,6 @@ async function getThumbnails(userIds) {
   return result;
 }
 
-// Where to look for .lua files
 const LUA_SEARCH_PATHS = [
   __dirname,
   path.join(__dirname, "scripts"),
@@ -253,7 +247,6 @@ app.post("/send", (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Executions counter endpoints ───
 app.post("/execution", (req, res) => {
   const count = bumpExecutions();
   const body = req.body || {};
@@ -271,7 +264,6 @@ app.post("/stats/reset", (req, res) => {
   res.json({ ok: true, count: 0 });
 });
 
-// ─── Standalone thumbnail endpoint (optional, useful for debugging) ───
 app.get("/thumbnail", async (req, res) => {
   const uid = parseInt(req.query.userId);
   if (!uid) return res.status(400).json({ ok: false, error: "missing userId" });
@@ -289,7 +281,6 @@ setInterval(() => {
   }
 }, 2000);
 
-// ─────────── Lua file serving ───────────
 function serveLua(name) {
   return (req, res) => {
     const filePath = findLuaFile(name);
@@ -330,7 +321,6 @@ app.get("/files", (req, res) => {
   res.json({ searchPaths: LUA_SEARCH_PATHS, files: found, cwd: process.cwd(), dirname: __dirname });
 });
 
-// ─── Clients list (now with real thumbnails) ───
 app.get("/clients", async (req, res) => {
   const users = userListPayload();
   const ids = users.map(u => u.userId).filter(Boolean);
@@ -354,6 +344,11 @@ app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Delta Hub Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+
+<!-- Google AdSense -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4246726390307705"
+     crossorigin="anonymous"></script>
+
 <style>
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -395,7 +390,6 @@ app.get("/", (req, res) => {
     letter-spacing:0.3px}
   .sub{color:#8a8a9a;font-size:13px;margin-bottom:24px}
 
-  /* ── Discord icon (top-left) ── */
   .brand{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px}
   .discord-link{
     display:inline-flex;align-items:center;justify-content:center;
@@ -446,6 +440,21 @@ app.get("/", (req, res) => {
   .http{background:rgba(58,47,30,0.8);color:#ddd47f;border:1px solid rgba(221,212,127,0.2)}
   .empty{color:#666;padding:60px 20px;text-align:center;grid-column:1/-1;
     background:rgba(28,28,34,0.4);border:1px dashed rgba(70,70,82,0.5);border-radius:12px}
+
+  /* ── Ad slot styling ── */
+  .ad-wrap{
+    max-width:1200px;margin-top:24px;padding:14px;
+    background:rgba(28,28,34,0.4);
+    border:1px solid rgba(70,70,82,0.5);
+    border-radius:12px;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    text-align:center;min-height:100px;
+  }
+  .ad-label{
+    font-size:10px;color:#5a5a6a;text-transform:uppercase;
+    letter-spacing:1.2px;font-weight:600;margin-bottom:8px;
+  }
+
   @media (max-width:520px){
     .grid{grid-template-columns:1fr}
     h1{font-size:18px}
@@ -481,10 +490,21 @@ app.get("/", (req, res) => {
       </div>
     </div>
     <div class="grid" id="grid"><div class="empty">Loading...</div></div>
+
+    <!-- Ad slot below the clients grid -->
+    <div class="ad-wrap">
+      <div class="ad-label">Advertisement</div>
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-4246726390307705"
+           data-ad-slot="0000000000"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
   </div>
 
 <script>
-// Nice inline SVG placeholder — matches the theme, no broken-image icon
 const FALLBACK_THUMB = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">' +
   '<rect width="56" height="56" rx="10" fill="#2a2a34"/>' +
