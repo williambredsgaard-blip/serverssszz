@@ -21,6 +21,8 @@ const PRODUCT_PRICE_USD = 0.87;
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
 const REQUIRED_CONFIRMATIONS = 2;
 const STORE_CALLBACK = "https://serverssszz.onrender.com/webhook/blockonomics";
+const ADSENSE_CLIENT = "ca-pub-4246726390307705";
+const ADSENSE_PUB_ID = "pub-4246726390307705";
 
 if (!BLOCKONOMICS_API_KEY) console.error("[config] BLOCKONOMICS_API_KEY is not set.");
 
@@ -323,74 +325,41 @@ const CURSOR_SCRIPT = `
   const glow = document.createElement('div');
   glow.setAttribute('aria-hidden','true');
   glow.style.cssText = [
-    'position:fixed',
-    'top:0','left:0',
-    'width:420px','height:420px',
-    'pointer-events:none',
-    'z-index:0',
-    'opacity:0',
-    'border-radius:50%',
+    'position:fixed','top:0','left:0','width:420px','height:420px',
+    'pointer-events:none','z-index:0','opacity:0','border-radius:50%',
     'background:radial-gradient(circle, rgba(255,70,70,0.16) 0%, rgba(230,50,50,0.07) 35%, rgba(200,40,40,0) 70%)',
-    'transform:translate3d(0,0,0)',
-    'transition:opacity .4s ease',
-    'will-change:transform',
-    'mix-blend-mode:screen'
+    'transform:translate3d(0,0,0)','transition:opacity .4s ease','will-change:transform','mix-blend-mode:screen'
   ].join(';');
   document.body.appendChild(glow);
 
   const dot = document.createElement('div');
   dot.setAttribute('aria-hidden','true');
   dot.style.cssText = [
-    'position:fixed',
-    'top:0','left:0',
-    'width:7px','height:7px',
-    'pointer-events:none',
-    'z-index:0',
-    'opacity:0',
-    'border-radius:50%',
+    'position:fixed','top:0','left:0','width:7px','height:7px',
+    'pointer-events:none','z-index:0','opacity:0','border-radius:50%',
     'background:radial-gradient(circle, rgba(255,140,140,0.9) 0%, rgba(230,60,60,0.35) 60%, transparent 100%)',
-    'transform:translate3d(0,0,0)',
-    'transition:opacity .4s ease, width .2s ease, height .2s ease',
-    'will-change:transform',
-    'mix-blend-mode:screen',
-    'box-shadow:0 0 12px rgba(255,80,80,0.7)'
+    'transform:translate3d(0,0,0)','transition:opacity .4s ease, width .2s ease, height .2s ease',
+    'will-change:transform','mix-blend-mode:screen','box-shadow:0 0 12px rgba(255,80,80,0.7)'
   ].join(';');
   document.body.appendChild(dot);
 
   let mx = innerWidth/2, my = innerHeight/2;
-  let gx = mx, gy = my;
-  let dx = mx, dy = my;
-  let visible = false;
+  let gx = mx, gy = my, dx = mx, dy = my, visible = false;
 
   window.addEventListener('mousemove', e => {
     mx = e.clientX; my = e.clientY;
-    if (!visible) {
-      visible = true;
-      glow.style.opacity = '1';
-      dot.style.opacity = '1';
-    }
+    if (!visible) { visible = true; glow.style.opacity = '1'; dot.style.opacity = '1'; }
   }, { passive: true });
 
   document.addEventListener('mouseleave', () => {
-    visible = false;
-    glow.style.opacity = '0';
-    dot.style.opacity = '0';
+    visible = false; glow.style.opacity = '0'; dot.style.opacity = '0';
   });
-
-  document.addEventListener('mousedown', () => {
-    dot.style.width = '20px';
-    dot.style.height = '20px';
-  });
-  document.addEventListener('mouseup', () => {
-    dot.style.width = '7px';
-    dot.style.height = '7px';
-  });
+  document.addEventListener('mousedown', () => { dot.style.width = '20px'; dot.style.height = '20px'; });
+  document.addEventListener('mouseup',   () => { dot.style.width = '7px';  dot.style.height = '7px'; });
 
   function loop() {
-    gx += (mx - gx) * 0.08;
-    gy += (my - gy) * 0.08;
-    dx += (mx - dx) * 0.22;
-    dy += (my - dy) * 0.22;
+    gx += (mx - gx) * 0.08; gy += (my - gy) * 0.08;
+    dx += (mx - dx) * 0.22; dy += (my - dy) * 0.22;
     glow.style.transform = 'translate3d(' + (gx - 210) + 'px,' + (gy - 210) + 'px,0)';
     dot.style.transform  = 'translate3d(' + (dx - 3.5) + 'px,' + (dy - 3.5) + 'px,0)';
     requestAnimationFrame(loop);
@@ -549,6 +518,12 @@ function topNav(active) {
     </div>
   `;
 }
+
+// ─── ADS.TXT (required for AdSense site verification) ───
+app.get("/ads.txt", (req, res) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.send(`google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0\n`);
+});
 
 // ─── /nfa ───
 app.get("/nfa", (req, res) => {
@@ -1303,7 +1278,7 @@ app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Roblox Script Hub Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4246726390307705" crossorigin="anonymous"></script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}" crossorigin="anonymous"></script>
 <style>
   *{box-sizing:border-box}
   html{overflow-x:hidden}
@@ -1577,7 +1552,7 @@ app.get("/", (req, res) => {
       -->
       <ins class="adsbygoogle"
            style="display:block;width:100%;min-height:90px"
-           data-ad-client="ca-pub-4246726390307705"
+           data-ad-client="${ADSENSE_CLIENT}"
            data-ad-slot="0000000000"
            data-ad-format="auto"
            data-full-width-responsive="true"></ins>
@@ -1690,4 +1665,5 @@ server.listen(PORT, async () => {
   console.log("Relay on " + PORT);
   loadState();
   console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
+  console.log(`[boot] ads.txt will serve: google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0`);
 });
