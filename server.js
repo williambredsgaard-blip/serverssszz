@@ -401,9 +401,11 @@ async function getThumbnails(userIds) {
         seen.add(entry.targetId);
         if (entry.state === "Completed" && entry.imageUrl) {
           result[entry.targetId] = entry.imageUrl;
+          result[String(entry.targetId)] = entry.imageUrl;
           thumbCache.set(entry.targetId, { url: entry.imageUrl, at: now });
         } else {
           result[entry.targetId] = null;
+          result[String(entry.targetId)] = null;
           thumbCache.set(entry.targetId, { url: null, at: now });
         }
       }
@@ -2534,8 +2536,7 @@ app.get("/control", (req, res) => {
   }
 
   function pickTarget(uid){
-    var n = parseInt(uid, 10);
-    selectedUserId = (!isNaN(n) && String(n) === String(uid)) ? n : uid;
+    selectedUserId = uid;
     renderUsers();
     updateTargetBars();
   }
@@ -2584,6 +2585,40 @@ app.get("/control", (req, res) => {
     Array.prototype.forEach.call(box.querySelectorAll('.ctrl-user'), function(el){
       el.addEventListener('click', function(){ pickTarget(el.getAttribute('data-uid')); });
     });
+    ensureThumbnails();
+  }
+
+  var thumbFetchInFlight = false;
+  function ensureThumbnails(){
+    var missing = [];
+    Object.keys(users).forEach(function(uid){
+      var u = users[uid];
+      if (u && !u.thumbnail && !u._thumbTried) missing.push(uid);
+    });
+    if (!missing.length || thumbFetchInFlight) return;
+    thumbFetchInFlight = true;
+    // Same source as the home dashboard — batches Roblox headshots server-side
+    fetch('/clients?t=' + Date.now()).then(function(r){ return r.json(); }).then(function(d){
+      thumbFetchInFlight = false;
+      var list = (d && d.users) || [];
+      var changed = false;
+      list.forEach(function(u){
+        if (!u || u.userId == null) return;
+        var key = null;
+        Object.keys(users).forEach(function(k){ if (String(k) === String(u.userId)) key = k; });
+        if (!key) return;
+        users[key]._thumbTried = true;
+        if (u.thumbnail && users[key].thumbnail !== u.thumbnail) {
+          users[key].thumbnail = u.thumbnail;
+          changed = true;
+        }
+      });
+      // Mark any still-missing so we don't hammer the endpoint every render
+      Object.keys(users).forEach(function(k){
+        if (!users[k].thumbnail) users[k]._thumbTried = true;
+      });
+      if (changed) renderUsers();
+    }).catch(function(){ thumbFetchInFlight = false; });
   }
 
   function handleMessage(data){
@@ -2601,7 +2636,9 @@ app.get("/control", (req, res) => {
     }
     if (data.type === 'userJoined') {
       if (data.userId) {
+        var prev = users[data.userId] || users[String(data.userId)];
         users[data.userId] = data;
+        if (prev && prev.thumbnail) users[data.userId].thumbnail = prev.thumbnail;
         renderUsers();
         toast('Client connected', data.displayName || ('User ' + data.userId), 'good');
       }
@@ -2618,7 +2655,12 @@ app.get("/control", (req, res) => {
       return;
     }
     if (data.type === 'ping') {
-      if (data.userId) { users[data.userId] = data; renderUsers(); }
+      if (data.userId) {
+        var prevP = users[data.userId] || users[String(data.userId)];
+        users[data.userId] = data;
+        if (prevP && prevP.thumbnail) users[data.userId].thumbnail = prevP.thumbnail;
+        renderUsers();
+      }
       return;
     }
     if (data.type === 'output') {
@@ -2663,19 +2705,8 @@ app.get("/control", (req, res) => {
 
   function sendToTarget(script, label){
     if (!selectedUserId) { toast('No target', 'Pick a user in the Players tab', 'bad'); return; }
-    var tid = selectedUserId;
-    var n = parseInt(tid, 10);
-    if (!isNaN(n) && String(n) === String(tid)) tid = n;
-    if (!send({ type: 'execute', targetUserId: tid, script: script, fromUserId: SESSION_ID })) return;
+    if (!send({ type: 'execute', targetUserId: selectedUserId, script: script, fromUserId: SESSION_ID })) return;
     toast('Sent', (label || 'Script') + ' → ' + (users[selectedUserId] ? users[selectedUserId].displayName : selectedUserId), 'good');
-    var out = $('outputBox');
-    if (out) {
-      var stamp = new Date().toLocaleTimeString();
-      var line = '[' + stamp + '] sent ' + (label || 'script') + ' → ' + tid + ' (waiting for reply...)';
-      if (out.textContent === '> Waiting for target output...') out.textContent = '';
-      out.textContent += (out.textContent ? '\\n\\n' : '') + line;
-      out.scrollTop = out.scrollHeight;
-    }
     setActiveTab('output');
   }
 
@@ -2985,18 +3016,7 @@ wss.on("connection", (ws) => {
     } else if (data.type === "requestUserList") {
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
     } else if (data.type === "execute" || data.type === "output") {
-      const delivered = deliverTo(data.targetUserId, data);
-      if (data.type === "execute" && !delivered) {
-        try {
-          ws.send(JSON.stringify({
-            type: "output",
-            targetUserId: data.fromUserId,
-            userId: data.targetUserId,
-            output: "(not delivered)",
-            error: "Target is offline or not connected to the relay"
-          }));
-        } catch (e) {}
-      }
+      deliverTo(data.targetUserId, data);
     }
   });
   ws.on("close", () => {
@@ -3025,19 +3045,7 @@ app.get("/poll", (req, res) => {
 app.post("/send", (req, res) => {
   const msg = req.body;
   if (!msg || !msg.type) return res.json({ ok: false });
-  if (msg.type === "execute" || msg.type === "output") {
-    const delivered = deliverTo(msg.targetUserId, msg);
-    if (msg.type === "execute" && !delivered && msg.fromUserId != null) {
-      deliverTo(msg.fromUserId, {
-        type: "output",
-        targetUserId: msg.fromUserId,
-        userId: msg.targetUserId,
-        output: "(not delivered)",
-        error: "Target is offline or not connected to the relay"
-      });
-    }
-    return res.json({ ok: true, delivered: !!delivered });
-  }
+  if (msg.type === "execute" || msg.type === "output") { deliverTo(msg.targetUserId, msg); return res.json({ ok: true }); }
   if (msg.type === "ping" || msg.type === "identify") {
     const entry = httpClients.get(msg.userId);
     if (entry) { Object.assign(entry.info, msg, { ts: Date.now() }); broadcast(msg, null); }
@@ -3092,7 +3100,13 @@ app.get("/clients", async (req, res) => {
   const ids = users.map(u => u.userId).filter(Boolean);
   let thumbs = {};
   if (ids.length > 0) { try { thumbs = await getThumbnails(ids); } catch (e) {} }
-  res.json({ users: users.map(u => ({ ...u, thumbnail: thumbs[u.userId] || null })), executions: stats.executions });
+  res.json({
+    users: users.map(u => {
+      const thumb = thumbs[u.userId] || thumbs[String(u.userId)] || thumbs[Number(u.userId)] || null;
+      return { ...u, thumbnail: thumb };
+    }),
+    executions: stats.executions
+  });
 });
 
 // ─── DASHBOARD ───
