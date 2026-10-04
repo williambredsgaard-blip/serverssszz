@@ -69,7 +69,8 @@ const ICONS = {
   send: (s) => `<svg viewBox="0 0 24 24" width="${s||15}" height="${s||15}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
   user: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
   externalLink: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
-  shield: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+  shield: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  upload: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`
 };
 function tagIcon(tag) {
   const t = String(tag).toLowerCase();
@@ -751,7 +752,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "stand
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s;position:relative}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
   .topnav-tabs a.active{background:linear-gradient(135deg,rgba(120,90,255,0.2),rgba(47,143,255,0.15));color:#fff;border:1px solid rgba(120,90,255,0.35)}
-  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(5,1fr)}.topnav-tabs a{text-align:center;padding:9px 6px}}
+  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(6,1fr)}.topnav-tabs a{text-align:center;padding:9px 4px;font-size:11.5px}}
   .tag{display:inline-block;padding:4px 10px;border-radius:6px;background:rgba(200,60,60,0.15);color:#ff7a7a;font-size:11px;font-weight:700;letter-spacing:0.6px;margin-bottom:14px}
   .h1{font-size:26px;font-weight:700;margin:0 0 8px;color:#fff;background:linear-gradient(90deg,#fff,#c5b3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
   .sub{color:#8a8a9a;font-size:13px;line-height:1.55;margin:0 0 24px;max-width:600px}
@@ -848,6 +849,7 @@ function topNav(active) {
     </div>
     <div class="topnav-tabs">
       <a href="/" class="${cls('store')}">Home</a>
+      <a href="/upload" class="${cls('upload')}">Upload</a>
       <a href="/scripts" class="${cls('scripts')}">Scripts</a>
       <a href="/nfa" class="${cls('nfa')}">Steam</a>
       <a href="/redeem" class="${cls('redeem')}">Redeem</a>
@@ -2444,7 +2446,6 @@ app.get("/control", (req, res) => {
   ].join('\\n');
 
   function findPlayerLua(varName, ctrlName){
-    // Lua snippet that sets varName to the Players player matching ctrlName (username or display name)
     return [
       'local ' + varName + ' = nil',
       'do',
@@ -2957,7 +2958,6 @@ function broadcast(obj, excludeWs) {
   for (const [ws] of wsClients) if (ws !== excludeWs && ws.readyState === 1) ws.send(msg);
   for (const [, entry] of httpClients) entry.queue.push(obj);
 }
-// ─── FIXED: string-normalized target lookup so "12345" matches 12345 ───
 function deliverTo(targetUserId, obj) {
   if (targetUserId == null) return false;
   const target = String(targetUserId);
@@ -3088,6 +3088,439 @@ app.get("/clients", async (req, res) => {
   res.json({ users: users.map(u => ({ ...u, thumbnail: thumbs[u.userId] || null })), executions: stats.executions });
 });
 
+// ═══════════════════════════════════════════════════════════════
+//  FILE UPLOADS
+// ═══════════════════════════════════════════════════════════════
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+const UPLOADS_FILE = path.join(__dirname, "uploads.json");
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+
+if (!fs.existsSync(UPLOAD_DIR)) { try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch (e) { console.error("[uploads] mkdir failed:", e.message); } }
+
+let uploads = {};
+try { if (fs.existsSync(UPLOADS_FILE)) uploads = JSON.parse(fs.readFileSync(UPLOADS_FILE, "utf8")) || {}; } catch (e) { console.error("[uploads] load error:", e.message); }
+
+let uploadsSaveTimer = null;
+function saveUploads() {
+  if (uploadsSaveTimer) return;
+  uploadsSaveTimer = setTimeout(() => {
+    uploadsSaveTimer = null;
+    try { fs.writeFileSync(UPLOADS_FILE, JSON.stringify(uploads, null, 2)); } catch (e) { console.error("[uploads] save error:", e.message); }
+  }, 300);
+}
+function newUploadId() {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let out = "";
+  for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+function extFromMime(mime) {
+  if (!mime) return ".bin";
+  const m = String(mime).toLowerCase();
+  const map = {
+    "video/mp4":".mp4", "video/webm":".webm", "video/quicktime":".mov", "video/x-matroska":".mkv",
+    "video/x-msvideo":".avi", "video/mpeg":".mpeg", "video/ogg":".ogv",
+    "image/png":".png", "image/jpeg":".jpg", "image/gif":".gif", "image/webp":".webp", "image/svg+xml":".svg",
+    "audio/mpeg":".mp3", "audio/ogg":".ogg", "audio/wav":".wav", "audio/webm":".weba",
+    "application/pdf":".pdf", "application/zip":".zip", "application/x-zip-compressed":".zip",
+    "application/x-rar-compressed":".rar", "application/json":".json", "text/plain":".txt"
+  };
+  return map[m] || "";
+}
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + " B";
+  if (n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+  if (n < 1024*1024*1024) return (n/(1024*1024)).toFixed(1) + " MB";
+  return (n/(1024*1024*1024)).toFixed(2) + " GB";
+}
+function uploadUrlFor(u) { return "/f/" + u.id + "/" + encodeURIComponent(u.originalName); }
+
+function serveUpload(req, res) {
+  const meta = uploads[req.params.id];
+  if (!meta) return res.status(404).set("Content-Type", "text/plain").send("File not found");
+  const filePath = path.join(UPLOAD_DIR, meta.storedName);
+  let stat;
+  try { stat = fs.statSync(filePath); } catch (e) { return res.status(404).set("Content-Type", "text/plain").send("File not found"); }
+  const total = stat.size;
+
+  res.set("Content-Type", meta.contentType || "application/octet-stream");
+  res.set("Accept-Ranges", "bytes");
+  res.set("Content-Disposition", 'inline; filename="' + String(meta.originalName).replace(/["\r\n]/g, "_") + '"');
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+  res.removeHeader("X-Frame-Options");
+
+  const range = req.headers.range;
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)/.exec(range);
+    if (m) {
+      let start = m[1] === "" ? null : parseInt(m[1], 10);
+      let end = m[2] === "" ? null : parseInt(m[2], 10);
+      if (start === null && end !== null) { start = Math.max(0, total - end); end = total - 1; }
+      if (start === null) start = 0;
+      if (end === null || end >= total) end = total - 1;
+      if (isNaN(start) || isNaN(end) || start > end || start >= total) {
+        res.status(416).set("Content-Range", "bytes */" + total).end();
+        return;
+      }
+      const chunkSize = end - start + 1;
+      res.status(206);
+      res.set("Content-Range", "bytes " + start + "-" + end + "/" + total);
+      res.set("Content-Length", String(chunkSize));
+      fs.createReadStream(filePath, { start, end }).on("error", () => res.end()).pipe(res);
+      return;
+    }
+  }
+  res.set("Content-Length", String(total));
+  fs.createReadStream(filePath).on("error", () => res.end()).pipe(res);
+}
+
+app.get("/f/:id", serveUpload);
+app.get("/f/:id/:filename", serveUpload);
+
+app.post("/api/upload", (req, res) => {
+  let filename = "file";
+  try { filename = decodeURIComponent(String(req.headers["x-filename"] || "file")); } catch (e) {}
+  filename = filename.replace(/[\/\\\r\n\t]/g, "_").slice(0, 200) || "file";
+  const contentType = String(req.headers["content-type"] || "application/octet-stream").slice(0, 120);
+
+  let ext = path.extname(filename).slice(0, 10);
+  if (!ext) ext = extFromMime(contentType);
+
+  const id = newUploadId();
+  const storedName = id + ext;
+  const filePath = path.join(UPLOAD_DIR, storedName);
+
+  const writeStream = fs.createWriteStream(filePath);
+  let size = 0;
+  let finished = false;
+  let failed = false;
+
+  function cleanup() {
+    try { fs.unlinkSync(filePath); } catch (e) {}
+  }
+
+  req.on("data", (chunk) => {
+    size += chunk.length;
+    if (size > MAX_UPLOAD_BYTES && !failed) {
+      failed = true;
+      try { req.destroy(); } catch (e) {}
+      try { writeStream.destroy(); } catch (e) {}
+      cleanup();
+      if (!res.headersSent) res.status(413).json({ ok: false, error: "File too large. Max " + fmtBytes(MAX_UPLOAD_BYTES) + "." });
+      return;
+    }
+    if (!failed) {
+      const ok = writeStream.write(chunk);
+      if (!ok) { req.pause(); writeStream.once("drain", () => req.resume()); }
+    }
+  });
+
+  req.on("end", () => {
+    if (failed || finished) return;
+    finished = true;
+    writeStream.end(() => {
+      if (size === 0) { cleanup(); return res.status(400).json({ ok: false, error: "Empty file" }); }
+      uploads[id] = {
+        id, originalName: filename, storedName,
+        size, contentType, uploadedAt: Date.now()
+      };
+      saveUploads();
+      console.log(`[upload] ${id} ${filename} (${fmtBytes(size)}) ${contentType}`);
+      res.json({ ok: true, id, url: uploadUrlFor(uploads[id]), size, name: filename, contentType });
+    });
+  });
+
+  req.on("error", (e) => {
+    if (failed || finished) return;
+    failed = true;
+    try { writeStream.destroy(); } catch (err) {}
+    cleanup();
+    if (!res.headersSent) res.status(500).json({ ok: false, error: "Upload failed: " + e.message });
+  });
+
+  writeStream.on("error", (e) => {
+    if (failed || finished) return;
+    failed = true;
+    cleanup();
+    if (!res.headersSent) res.status(500).json({ ok: false, error: "Write failed: " + e.message });
+  });
+});
+
+app.get("/api/uploads", (req, res) => {
+  const list = Object.values(uploads)
+    .sort((a, b) => b.uploadedAt - a.uploadedAt)
+    .slice(0, 60)
+    .map(u => ({
+      id: u.id, name: u.originalName, size: u.size, contentType: u.contentType,
+      uploadedAt: u.uploadedAt, url: uploadUrlFor(u)
+    }));
+  res.json({ ok: true, uploads: list });
+});
+
+// ─── /upload page ───
+app.get("/upload", (req, res) => {
+  const uploadCss = `
+    .upload-zone{border:2px dashed rgba(120,90,255,0.5);border-radius:16px;padding:48px 24px;text-align:center;background:rgba(28,28,34,0.55);cursor:pointer;transition:all .2s;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:relative}
+    .upload-zone:hover{border-color:rgba(120,90,255,0.8);background:rgba(40,40,50,0.7)}
+    .upload-zone.dragover{border-color:#7850ff;background:rgba(120,90,255,0.12);transform:scale(1.01);box-shadow:0 0 0 4px rgba(120,90,255,0.15)}
+    .upload-zone .uz-icon{display:flex;justify-content:center;margin-bottom:14px;color:#b9a3ff}
+    .upload-zone .uz-title{font-size:17px;font-weight:700;color:#fff;margin-bottom:6px}
+    .upload-zone .uz-sub{font-size:13px;color:#8a8a9a;line-height:1.55}
+    .progress-wrap{margin-top:20px;display:none}
+    .progress-bar{width:100%;height:10px;background:rgba(18,18,24,0.9);border:1px solid rgba(70,70,82,0.6);border-radius:6px;overflow:hidden}
+    .progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#7850ff,#2f8fff);transition:width .2s ease;box-shadow:0 0 14px rgba(120,90,255,0.6)}
+    .progress-meta{display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-top:8px}
+    .result-card{margin-top:22px;padding:20px;background:rgba(30,58,42,0.28);border:1px solid rgba(125,221,159,0.4);border-radius:14px;display:none}
+    .result-card.error{background:rgba(60,30,30,0.3);border-color:rgba(255,122,122,0.4)}
+    .result-card .rc-title{font-size:14px;font-weight:700;color:#7ddd9f;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .result-card.error .rc-title{color:#ff7a7a}
+    .result-link{font-family:ui-monospace,monospace;font-size:12.5px;background:rgba(18,18,24,0.9);border:1px solid rgba(70,70,82,0.7);border-radius:10px;padding:12px 14px;color:#b9a3ff;word-break:break-all;user-select:all;line-height:1.5}
+    .result-actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+    .result-btn{padding:9px 18px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(120,90,255,0.5);background:rgba(120,90,255,0.18);color:#c5b3ff;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:7px}
+    .result-btn:hover{background:rgba(120,90,255,0.3);transform:translateY(-1px);color:#fff}
+    .result-preview{margin-top:14px;border-radius:12px;overflow:hidden;background:#0a0a10;border:1px solid rgba(60,60,72,0.6);max-height:420px;display:flex;justify-content:center}
+    .result-preview img,.result-preview video{max-width:100%;max-height:420px;display:block}
+    .result-meta{font-size:12px;color:#8a8a9a;margin-top:10px;line-height:1.55}
+    .recent-list{margin-top:24px}
+    .recent-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(24,24,30,0.7);border:1px solid rgba(60,60,72,0.5);border-radius:10px;margin-bottom:8px;transition:all .15s;min-width:0}
+    .recent-item:hover{border-color:rgba(120,90,255,0.5);background:rgba(40,40,50,0.85)}
+    .recent-icon{width:40px;height:40px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(120,90,255,0.22),rgba(47,143,255,0.14));border:1px solid rgba(120,90,255,0.35);color:#b9a3ff}
+    .recent-meta{flex:1;min-width:0}
+    .recent-name{font-size:13.5px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .recent-sub{font-size:11.5px;color:#8a8a9a;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .recent-copy{background:rgba(120,90,255,0.15);border:1px solid rgba(120,90,255,0.4);color:#c5b3ff;padding:7px 13px;border-radius:8px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;transition:all .15s;flex-shrink:0}
+    .recent-copy:hover{background:rgba(120,90,255,0.3);color:#fff}
+    .recent-empty{color:#6a6a7a;font-size:13px;text-align:center;padding:22px 0}
+    @media (max-width:520px){
+      .upload-zone{padding:34px 18px}
+      .upload-zone .uz-title{font-size:15px}
+      .result-actions{flex-direction:column}
+      .result-btn{justify-content:center;width:100%}
+    }
+  `;
+
+  const uploadJs = `
+  (function(){
+    var drop = document.getElementById('drop');
+    var input = document.getElementById('fileInput');
+    var progressWrap = document.getElementById('progressWrap');
+    var progressFill = document.getElementById('progressFill');
+    var progressPct = document.getElementById('progressPct');
+    var progressSize = document.getElementById('progressSize');
+    var resultCard = document.getElementById('resultCard');
+    var resultTitle = document.getElementById('resultTitle');
+    var resultBody = document.getElementById('resultBody');
+    var recentList = document.getElementById('recentList');
+    var MAX = ${MAX_UPLOAD_BYTES};
+
+    function fmtBytes(n){
+      n = Number(n) || 0;
+      if (n < 1024) return n + ' B';
+      if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+      if (n < 1024*1024*1024) return (n/(1024*1024)).toFixed(1) + ' MB';
+      return (n/(1024*1024*1024)).toFixed(2) + ' GB';
+    }
+    function escapeHtml(s){return String(s).replace(/[<>&"']/g, function(c){return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c];});}
+    function fullUrl(u){ return location.origin + u; }
+
+    function copyText(text, cb){
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(cb).catch(function(){
+          var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+          ta.select(); try { document.execCommand('copy'); } catch(e){}
+          document.body.removeChild(ta); cb();
+        });
+      } else {
+        var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+        ta.select(); try { document.execCommand('copy'); } catch(e){}
+        document.body.removeChild(ta); cb();
+      }
+    }
+
+    function showError(msg){
+      resultCard.style.display = 'block';
+      resultCard.classList.add('error');
+      resultTitle.textContent = 'Upload failed';
+      resultBody.innerHTML = '<div style="color:#ff9a9a;font-size:13px;line-height:1.55">' + escapeHtml(msg) + '</div>';
+      progressWrap.style.display = 'none';
+    }
+
+    function showResult(data){
+      resultCard.style.display = 'block';
+      resultCard.classList.remove('error');
+      resultTitle.textContent = 'Upload complete';
+      var url = fullUrl(data.url);
+      var ct = data.contentType || '';
+      var preview = '';
+      if (ct.indexOf('image/') === 0) {
+        preview = '<div class="result-preview"><img src="' + escapeHtml(data.url) + '" alt=""></div>';
+      } else if (ct.indexOf('video/') === 0) {
+        preview = '<div class="result-preview"><video src="' + escapeHtml(data.url) + '" controls playsinline preload="metadata"></video></div>';
+      } else if (ct.indexOf('audio/') === 0) {
+        preview = '<div class="result-preview" style="padding:16px"><audio src="' + escapeHtml(data.url) + '" controls style="width:100%"></audio></div>';
+      }
+      resultBody.innerHTML =
+        '<div class="result-link" id="resLink">' + escapeHtml(url) + '</div>' +
+        '<div class="result-actions">' +
+          '<button class="result-btn" id="copyLinkBtn">Copy link</button>' +
+          '<a class="result-btn" href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener noreferrer">Open</a>' +
+          '<a class="result-btn" href="' + escapeHtml(data.url) + '" download>Download</a>' +
+        '</div>' +
+        preview +
+        '<div class="result-meta">' + escapeHtml(data.name) + ' · ' + fmtBytes(data.size) + ' · ' + escapeHtml(ct || 'unknown') + '<br>Paste this link on Discord, Twitter, or anywhere else to embed it.</div>';
+      var btn = document.getElementById('copyLinkBtn');
+      if (btn) btn.addEventListener('click', function(){
+        copyText(url, function(){
+          var orig = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(function(){ btn.textContent = orig; }, 1400);
+        });
+      });
+      progressWrap.style.display = 'none';
+    }
+
+    function uploadFile(file){
+      if (!file) return;
+      if (file.size > MAX) { showError('File too large. Max ' + fmtBytes(MAX) + '.'); return; }
+      if (file.size === 0) { showError('File is empty.'); return; }
+
+      progressWrap.style.display = 'block';
+      progressFill.style.width = '0%';
+      progressPct.textContent = '0%';
+      progressSize.textContent = '0 / ' + fmtBytes(file.size);
+      resultCard.style.display = 'none';
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload', true);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name || 'file'));
+
+      xhr.upload.onprogress = function(e){
+        if (!e.lengthComputable) return;
+        var pct = Math.round((e.loaded / e.total) * 100);
+        progressFill.style.width = pct + '%';
+        progressPct.textContent = pct + '%';
+        progressSize.textContent = fmtBytes(e.loaded) + ' / ' + fmtBytes(e.total);
+      };
+      xhr.onload = function(){
+        var data;
+        try { data = JSON.parse(xhr.responseText); } catch (e) { return showError('Bad server response'); }
+        if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+          showResult(data);
+          loadRecent();
+        } else {
+          showError((data && data.error) || ('Server error ' + xhr.status));
+        }
+      };
+      xhr.onerror = function(){ showError('Network error during upload'); };
+      xhr.send(file);
+    }
+
+    drop.addEventListener('click', function(){ input.click(); });
+    input.addEventListener('change', function(){ if (input.files && input.files[0]) uploadFile(input.files[0]); input.value = ''; });
+
+    ['dragenter','dragover'].forEach(function(ev){
+      drop.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); drop.classList.add('dragover'); });
+    });
+    ['dragleave','drop'].forEach(function(ev){
+      drop.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover'); });
+    });
+    drop.addEventListener('drop', function(e){
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) uploadFile(files[0]);
+    });
+
+    function iconFor(ct){
+      if (!ct) return '${ICONS.document(20)}';
+      if (ct.indexOf('image/') === 0) return '${ICONS.eye(20)}';
+      if (ct.indexOf('video/') === 0) return '${ICONS.play(20)}';
+      return '${ICONS.document(20)}';
+    }
+
+    function timeAgo(ms){
+      var s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+      if (s < 60) return s + 's ago';
+      var m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      var h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      var d = Math.floor(h / 24); if (d < 7) return d + 'd ago';
+      var w = Math.floor(d / 7); if (w < 5) return w + 'w ago';
+      return Math.floor(d / 30) + 'mo ago';
+    }
+
+    function renderRecent(list){
+      if (!list || list.length === 0) {
+        recentList.innerHTML = '<div class="recent-empty">No uploads yet.</div>';
+        return;
+      }
+      recentList.innerHTML = list.map(function(u){
+        var url = fullUrl(u.url);
+        return '<div class="recent-item">' +
+          '<div class="recent-icon">' + iconFor(u.contentType) + '</div>' +
+          '<div class="recent-meta">' +
+            '<div class="recent-name">' + escapeHtml(u.name) + '</div>' +
+            '<div class="recent-sub">' + fmtBytes(u.size) + ' · ' + timeAgo(u.uploadedAt) + '</div>' +
+          '</div>' +
+          '<button class="recent-copy" data-url="' + escapeHtml(url) + '">Copy link</button>' +
+        '</div>';
+      }).join('');
+      Array.prototype.forEach.call(recentList.querySelectorAll('.recent-copy'), function(b){
+        b.addEventListener('click', function(){
+          copyText(b.getAttribute('data-url'), function(){
+            var o = b.textContent; b.textContent = 'Copied!';
+            setTimeout(function(){ b.textContent = o; }, 1400);
+          });
+        });
+      });
+    }
+
+    function loadRecent(){
+      fetch('/api/uploads?t=' + Date.now())
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d && d.ok) renderRecent(d.uploads); })
+        .catch(function(){});
+    }
+    loadRecent();
+    setInterval(loadRecent, 15000);
+  })();
+  `;
+
+  const html = pageShell("Upload - Roblox Script Hub", `
+    ${topNav('upload')}
+    <div class="tag">FILE UPLOAD</div>
+    <div class="h1">Upload &amp; Share</div>
+    <p class="sub">Drop a video, image, zip, or any file. You get a permanent link that plays inline on Discord and other platforms.</p>
+
+    <div style="max-width:720px">
+      <div class="upload-zone" id="drop">
+        <input type="file" id="fileInput" style="display:none">
+        <div class="uz-icon">${ICONS.upload(48)}</div>
+        <div class="uz-title">Click or drag a file here</div>
+        <div class="uz-sub">Videos, images, archives, documents — up to ${fmtBytes(MAX_UPLOAD_BYTES)}</div>
+      </div>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-meta"><span id="progressPct">0%</span><span id="progressSize">0 B</span></div>
+      </div>
+
+      <div class="result-card" id="resultCard">
+        <div class="rc-title" id="resultTitle">Upload complete</div>
+        <div id="resultBody"></div>
+      </div>
+
+      <div class="recent-list">
+        <div class="label">Recent uploads</div>
+        <div id="recentList"><div class="recent-empty">Loading…</div></div>
+      </div>
+    </div>
+  `, uploadCss, uploadJs, "wide");
+
+  res.set("Content-Type", "text/html").send(html);
+});
+
 // ─── DASHBOARD ───
 app.get("/", (req, res) => {
   res.set("Content-Type", "text/html");
@@ -3177,8 +3610,8 @@ app.get("/", (req, res) => {
     h1{font-size:18px}
     .sub{font-size:12px;margin-bottom:18px}
     .topnav{flex-wrap:wrap;gap:10px;padding-bottom:12px;margin-bottom:16px}
-    .topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-    .topnav-tabs a{text-align:center;padding:9px 4px;font-size:12px}
+    .topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+    .topnav-tabs a{text-align:center;padding:9px 4px;font-size:11.5px}
     .header{flex-direction:column;align-items:stretch;gap:12px;margin-bottom:16px}
     .stats{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .stat{min-width:0;padding:10px 12px}
@@ -3210,6 +3643,7 @@ app.get("/", (req, res) => {
       </div>
       <div class="topnav-tabs">
         <a href="/" class="active">Home</a>
+        <a href="/upload">Upload</a>
         <a href="/scripts">Scripts</a>
         <a href="/nfa">Steam</a>
         <a href="/redeem">Redeem</a>
@@ -3244,6 +3678,15 @@ app.get("/", (req, res) => {
       <div class="scripts-card-stats">
         <span>${ICONS.eye(13)} ${fmtCount(totalViews)}</span>
         <span>${ICONS.bolt(13)} ${fmtCount(totalLikes)}</span>
+      </div>
+      <div class="scripts-card-arrow">${ICONS.arrowRight(18)}</div>
+    </a>
+
+    <a href="/upload" class="scripts-card">
+      <div class="scripts-card-icon">${ICONS.upload(30)}</div>
+      <div class="scripts-card-meta">
+        <div class="scripts-card-name">Upload files</div>
+        <div class="scripts-card-sub">Share videos, images, and files with a permanent link</div>
       </div>
       <div class="scripts-card-arrow">${ICONS.arrowRight(18)}</div>
     </a>
@@ -3333,4 +3776,6 @@ server.listen(PORT, async () => {
   console.log(`[boot] ads.txt will serve: google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0`);
   console.log(`[boot] AdSense client: ${ADSENSE_CLIENT}`);
   console.log(`[boot] scripts loaded: ${SCRIPTS.length} (${SCRIPTS.map(s => s.slug).join(", ")})`);
+  console.log(`[boot] uploads: ${Object.keys(uploads).length} file(s) stored, max ${fmtBytes(MAX_UPLOAD_BYTES)} each`);
+  console.log(`[boot] upload dir: ${UPLOAD_DIR}`);
 });
