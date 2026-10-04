@@ -68,7 +68,8 @@ const ICONS = {
   more: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="currentColor" ${S}><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`,
   send: (s) => `<svg viewBox="0 0 24 24" width="${s||15}" height="${s||15}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
   user: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-  externalLink: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
+  externalLink: (s) => `<svg viewBox="0 0 24 24" width="${s||14}" height="${s||14}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+  shield: (s) => `<svg viewBox="0 0 24 24" width="${s||16}" height="${s||16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${S}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
 };
 function tagIcon(tag) {
   const t = String(tag).toLowerCase();
@@ -105,6 +106,34 @@ function fmtCount(n) {
   if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,"") + "M";
   if (n >= 1000)    return (n/1000).toFixed(1).replace(/\.0$/,"") + "K";
   return String(n);
+}
+
+// ─── WHITELIST READER (used by both Lua controller and web control panel) ───
+function readWhitelist() {
+  const paths = [__dirname, path.join(__dirname, "scripts"), path.join(__dirname, "public"), process.cwd()];
+  for (const dir of paths) {
+    const full = path.join(dir, "wh.txt");
+    if (fs.existsSync(full)) {
+      try {
+        const entries = fs.readFileSync(full, "utf8")
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(l => l.length > 0 && !l.startsWith("#") && !l.startsWith("--"));
+        return entries;
+      } catch (e) {
+        console.error("[whitelist] read error:", e.message);
+        return [];
+      }
+    }
+  }
+  console.error("[whitelist] wh.txt not found in any search path");
+  return [];
+}
+function isWhitelistedUsername(name) {
+  if (!name) return false;
+  const lower = String(name).trim().toLowerCase();
+  if (!lower) return false;
+  return readWhitelist().some(n => n.toLowerCase() === lower);
 }
 
 // ─── SOCIAL DATA ───
@@ -609,9 +638,6 @@ function shToggleSaved(slug) {
 // ─── PAGE SHELL ───
 function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "standard") {
   const isWide = layout === "wide";
-  // Vertical Upward ad — slot 1135972285. Rendered twice on wide pages (left & right rails).
-  // The .ad-sidebar wrapper shows a visible placeholder box so the ad slot is always
-  // apparent to the user and to reviewers, even before AdSense fills it.
   const adBlockLeft = `
     <div class="ad-sidebar left" aria-label="Advertisement">
       <ins class="adsbygoogle"
@@ -725,7 +751,7 @@ function pageShell(title, bodyHtml, extraCss = "", extraJs = "", layout = "stand
   .topnav-tabs a{padding:9px 18px;border-radius:10px;text-decoration:none;color:#a8a8b8;font-size:13px;font-weight:600;transition:background .15s,color .15s;position:relative}
   .topnav-tabs a:hover{background:rgba(255,255,255,0.05);color:#fff}
   .topnav-tabs a.active{background:linear-gradient(135deg,rgba(120,90,255,0.2),rgba(47,143,255,0.15));color:#fff;border:1px solid rgba(120,90,255,0.35)}
-  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(4,1fr)}.topnav-tabs a{text-align:center;padding:9px 6px}}
+  @media (max-width:520px){.topnav{flex-wrap:wrap;gap:10px}.topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(5,1fr)}.topnav-tabs a{text-align:center;padding:9px 6px}}
   .tag{display:inline-block;padding:4px 10px;border-radius:6px;background:rgba(200,60,60,0.15);color:#ff7a7a;font-size:11px;font-weight:700;letter-spacing:0.6px;margin-bottom:14px}
   .h1{font-size:26px;font-weight:700;margin:0 0 8px;color:#fff;background:linear-gradient(90deg,#fff,#c5b3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
   .sub{color:#8a8a9a;font-size:13px;line-height:1.55;margin:0 0 24px;max-width:600px}
@@ -825,6 +851,7 @@ function topNav(active) {
       <a href="/scripts" class="${cls('scripts')}">Scripts</a>
       <a href="/nfa" class="${cls('nfa')}">Steam</a>
       <a href="/redeem" class="${cls('redeem')}">Redeem</a>
+      <a href="/control" class="${cls('control')}">Control</a>
     </div>
   </div>`;
 }
@@ -1036,6 +1063,18 @@ app.get("/api/user/:username", (req, res) => {
     following: u.following.length,
     commentsCount
   });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  CONTROL PANEL AUTH
+// ═══════════════════════════════════════════════════════════════
+app.post("/api/control/auth", (req, res) => {
+  const username = String((req.body || {}).username || "").trim();
+  if (!username) return res.status(400).json({ ok: false, error: "No username provided" });
+  if (!isWhitelistedUsername(username)) {
+    return res.status(403).json({ ok: false, error: "This username is not on the whitelist." });
+  }
+  res.json({ ok: true, username });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1287,7 +1326,6 @@ app.get("/script/:slug", (req, res) => {
 
       const DEVICE = shGetDeviceId();
 
-      // ── Tabs ──
       const tabBtns = document.querySelectorAll('.script-tab');
       const panels = document.querySelectorAll('.script-panel');
       tabBtns.forEach(b => b.addEventListener('click', () => {
@@ -1296,7 +1334,6 @@ app.get("/script/:slug", (req, res) => {
         panels.forEach(p => p.classList.toggle('active', p.dataset.panel === t));
       }));
 
-      // ── View counter ──
       (async function trackView() {
         try {
           const r = await fetch('/api/script/' + SLUG + '/view', { method: 'POST' });
@@ -1308,7 +1345,6 @@ app.get("/script/:slug", (req, res) => {
         } catch (e) {}
       })();
 
-      // ── Copy script loader ──
       const loaderText = document.getElementById('loaderText').innerText.replace(/Copy$/,'').trim();
       function copyToClipboard(text, done) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1338,7 +1374,6 @@ app.get("/script/:slug", (req, res) => {
         copyToClipboard(loaderText, () => { smallBtn.textContent = 'Copied'; setTimeout(() => smallBtn.textContent = orig, 1600); });
       });
 
-      // ── Script vote ──
       const upBtn = document.getElementById('scriptUpBtn');
       const downBtn = document.getElementById('scriptDownBtn');
       const statLikes = document.getElementById('statLikes');
@@ -1372,7 +1407,6 @@ app.get("/script/:slug", (req, res) => {
         } catch (e) {}
       })();
 
-      // ── Save button ──
       const saveBtn = document.getElementById('saveBtn');
       function paintSaveBtn() {
         if (!saveBtn) return;
@@ -1385,7 +1419,6 @@ app.get("/script/:slug", (req, res) => {
         saveBtn.addEventListener('click', () => { shToggleSaved(SLUG); paintSaveBtn(); });
       }
 
-      // ── Share button ──
       const shareBtn = document.getElementById('shareBtn');
       if (shareBtn) {
         shareBtn.addEventListener('click', async () => {
@@ -1396,7 +1429,7 @@ app.get("/script/:slug", (req, res) => {
               await navigator.share({ title, text, url: SHARE_URL });
               return;
             }
-          } catch (e) { /* user cancelled or unsupported */ }
+          } catch (e) { }
           copyToClipboard(SHARE_URL, () => {
             const orig = shareBtn.innerHTML;
             shareBtn.innerHTML = '${ICONS.check(15)} Copied';
@@ -1405,7 +1438,6 @@ app.get("/script/:slug", (req, res) => {
         });
       }
 
-      // ── Follow button ──
       const followBtn = document.getElementById('followBtn');
       const followCountEl = document.getElementById('authorFollowerCount');
       function paintFollowBtn(isFollowing) {
@@ -1454,7 +1486,6 @@ app.get("/script/:slug", (req, res) => {
         return true;
       }
 
-      // ── Comment system ──
       const commentList = document.getElementById('commentList');
       const textarea = document.getElementById('commentText');
       const submitBtn = document.getElementById('commentSubmit');
@@ -1522,7 +1553,6 @@ app.get("/script/:slug", (req, res) => {
       textarea.addEventListener('input', updateTextareaState);
       updateTextareaState();
 
-      // ── Smiley panel ──
       const smileys = [':)', ':D', ';)', ':P', ':(', ':/', ':3', '-_-', '^_^', 'o_O', '\\\\(^o^)/', ':O'];
       smileys.forEach(s => {
         const b = document.createElement('button');
@@ -1543,7 +1573,6 @@ app.get("/script/:slug", (req, res) => {
       document.addEventListener('click', () => emojiPanel.classList.remove('open'));
       emojiPanel.addEventListener('click', e => e.stopPropagation());
 
-      // ── Submit comment ──
       async function askUsername() {
         return new Promise((resolve) => {
           const modal = document.getElementById('unameModal');
@@ -1611,7 +1640,6 @@ app.get("/script/:slug", (req, res) => {
         submitBtn.disabled = false;
       });
 
-      // ── Comment vote delegation ──
       commentList.addEventListener('click', async (e) => {
         const btn = e.target.closest('.comment-action[data-vote]');
         if (!btn) return;
@@ -2198,10 +2226,700 @@ app.post("/redeem", (req, res) => {
   res.json({ ok: true, credential: item.credential });
 });
 
+// ═══════════════════════════════════════════════════════════════
+//  WEB CONTROL PANEL  —  /control
+// ═══════════════════════════════════════════════════════════════
+app.get("/control", (req, res) => {
+  const controlCss = `
+    .ctrl-wrap{max-width:1100px;margin:0 auto}
+    .ctrl-card{background:rgba(28,28,34,0.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(90,90,105,0.55);border-radius:14px;padding:24px;box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+    .ctrl-tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid rgba(70,70,82,0.5);padding-bottom:12px;flex-wrap:wrap}
+    .ctrl-tab{padding:8px 16px;border-radius:8px;background:transparent;border:1px solid transparent;color:#a8a8b8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+    .ctrl-tab:hover{background:rgba(255,255,255,0.05);color:#fff}
+    .ctrl-tab.active{background:linear-gradient(135deg,rgba(120,90,255,0.22),rgba(47,143,255,0.15));color:#fff;border-color:rgba(120,90,255,0.4)}
+    .ctrl-tab .tab-count{background:rgba(120,90,255,0.25);color:#c5b3ff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;margin-left:6px}
+    .ctrl-panel{display:none}
+    .ctrl-panel.active{display:block}
+    .ctrl-user{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(24,24,30,0.72);border:1px solid rgba(60,60,72,0.5);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+    .ctrl-user:hover{border-color:rgba(140,105,255,0.5);background:rgba(40,40,50,0.85)}
+    .ctrl-user.selected{border-color:rgba(120,90,255,0.75);background:rgba(120,90,255,0.13);box-shadow:0 0 0 3px rgba(120,90,255,0.1)}
+    .ctrl-user img{width:42px;height:42px;border-radius:10px;background:#2a2a34;flex-shrink:0;object-fit:cover;border:1px solid rgba(120,90,255,0.25)}
+    .ctrl-user .meta{flex:1;min-width:0}
+    .ctrl-user .nm{color:#fff;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ctrl-user .sub{color:#8a8a9a;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ctrl-user .badge{background:rgba(30,58,42,0.8);color:#7ddd9f;font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:8px}
+    .ctrl-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;border-radius:10px;background:rgba(40,40,48,0.85);border:1px solid rgba(70,70,82,0.7);color:#d8d8e0;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+    .ctrl-btn:hover:not(:disabled){background:rgba(58,58,70,0.95);color:#fff;border-color:rgba(140,105,255,0.5);transform:translateY(-1px)}
+    .ctrl-btn.danger{border-color:rgba(200,60,60,0.5);color:#ff9a9a}
+    .ctrl-btn.danger:hover:not(:disabled){background:rgba(120,40,40,0.4);color:#fff;border-color:rgba(230,90,90,0.7)}
+    .ctrl-btn:disabled{opacity:0.4;cursor:not-allowed}
+    .ctrl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+    .ctrl-textarea{width:100%;min-height:220px;padding:14px;background:rgba(10,10,16,0.9);border:1px solid rgba(60,60,72,0.7);border-radius:10px;color:#b9a3ff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;resize:vertical;outline:none;line-height:1.55;box-sizing:border-box}
+    .ctrl-textarea:focus{border-color:rgba(120,90,255,0.55);box-shadow:0 0 0 3px rgba(120,90,255,0.12)}
+    .ctrl-output{background:rgba(10,10,16,0.92);border:1px solid rgba(60,60,72,0.7);border-radius:10px;padding:14px;color:#b9a3ff;font-family:ui-monospace,monospace;font-size:12px;min-height:220px;max-height:520px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;line-height:1.5}
+    .ctrl-status{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;font-size:11.5px;font-weight:700}
+    .ctrl-status.online{background:rgba(30,58,42,0.8);color:#7ddd9f}
+    .ctrl-status.offline{background:rgba(90,40,40,0.8);color:#ff9a9a}
+    .ctrl-status.connecting{background:rgba(90,70,30,0.8);color:#e8c07a}
+    .ctrl-status .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+    .ctrl-toasts{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;max-width:320px;pointer-events:none}
+    .ctrl-toast{background:rgba(28,28,34,0.96);border:1px solid rgba(70,70,82,0.7);border-radius:10px;padding:11px 14px;color:#eee;font-size:12.5px;min-width:220px;box-shadow:0 12px 30px rgba(0,0,0,0.5);pointer-events:auto;transition:opacity .3s,transform .3s}
+    .ctrl-toast .tt{font-weight:700;font-size:12px;margin-bottom:3px;color:#fff}
+    .ctrl-toast .tb{color:#b4b4c0;font-size:12px;line-height:1.4}
+    .ctrl-toast.good{border-left:3px solid #7ddd9f}
+    .ctrl-toast.bad{border-left:3px solid #ff7a7a}
+    .ctrl-toast.warn{border-left:3px solid #e8c07a}
+    .ctrl-target-bar{display:flex;align-items:center;gap:10px;padding:11px 14px;background:rgba(120,90,255,0.1);border:1px solid rgba(120,90,255,0.35);border-radius:10px;color:#c5b3ff;font-size:13px;margin-bottom:16px}
+    .ctrl-target-bar.empty{background:rgba(28,28,34,0.6);border-color:rgba(70,70,82,0.5);color:#8a8a9a}
+    .ctrl-label{font-size:11px;color:#8a8a9a;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin:18px 0 8px}
+    .ctrl-hint{color:#6a6a7a;font-size:11.5px;line-height:1.5;margin-top:6px}
+  `;
+
+  const controlJs = `
+(function(){
+  var SESSION_ID = null;
+  var USERNAME = null;
+  var MY_ROBLOX_ID = parseInt(localStorage.getItem('ctrl_roblox_id') || '0', 10) || null;
+  var ws = null;
+  var users = {};
+  var selectedUserId = null;
+  var reconnectTimer = null;
+
+  function $(id){ return document.getElementById(id); }
+
+  function toast(title, body, kind){
+    var wrap = $('ctrlToasts');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'ctrlToasts';
+      wrap.className = 'ctrl-toasts';
+      document.body.appendChild(wrap);
+    }
+    var el = document.createElement('div');
+    el.className = 'ctrl-toast ' + (kind || '');
+    var t = document.createElement('div'); t.className = 'tt'; t.textContent = title;
+    var b = document.createElement('div'); b.className = 'tb'; b.textContent = body || '';
+    el.appendChild(t); el.appendChild(b);
+    wrap.appendChild(el);
+    setTimeout(function(){
+      el.style.opacity = '0';
+      el.style.transform = 'translateX(20px)';
+      setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+    }, 3400);
+  }
+
+  function setStatus(cls, text){
+    var b = $('statusBadge'); if (!b) return;
+    b.className = 'ctrl-status ' + cls;
+    b.innerHTML = '<span class="dot"></span> ' + text;
+  }
+
+  function fmtPlace(id){
+    if (!id) return 'Unknown place';
+    return 'Place ' + id;
+  }
+
+  var SCRIPT_KILL = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'if lp.Character then',
+    '    local h = lp.Character:FindFirstChildOfClass("Humanoid")',
+    '    if h then h.Health = 0 end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_TRIP = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if char then',
+    '    local hum = char:FindFirstChildOfClass("Humanoid")',
+    '    local root = char:FindFirstChild("HumanoidRootPart")',
+    '    if hum and root then',
+    '        hum:ChangeState(Enum.HumanoidStateType.FallingDown)',
+    '        root.Velocity = root.CFrame.LookVector * 30',
+    '    end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_FLING = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if char then',
+    '    for _, p in pairs(char:GetDescendants()) do',
+    '        if p:IsA("BasePart") then p.CanCollide = false end',
+    '    end',
+    '    local hrp = char:FindFirstChild("HumanoidRootPart")',
+    '    if hrp then',
+    '        local old = hrp:FindFirstChild("TrollFling")',
+    '        if old then old:Destroy() end',
+    '        local bav = Instance.new("BodyAngularVelocity")',
+    '        bav.Name = "TrollFling"',
+    '        bav.AngularVelocity = Vector3.new(999999, 999999, 999999)',
+    '        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)',
+    '        bav.P = 1250',
+    '        bav.Parent = hrp',
+    '        task.delay(4, function() if bav and bav.Parent then bav:Destroy() end end)',
+    '    end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_FREEZE = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if char then',
+    '    for _, p in pairs(char:GetDescendants()) do',
+    '        if p:IsA("BasePart") and not p.Anchored then p.Anchored = true end',
+    '    end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_UNFREEZE = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if char then',
+    '    for _, p in pairs(char:GetDescendants()) do',
+    '        if p:IsA("BasePart") and p.Anchored then p.Anchored = false end',
+    '    end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_FIRE = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if not char then return end',
+    'for _, p in pairs(char:GetDescendants()) do',
+    '    if p:IsA("Fire") and p.Name == "TrollFire" then p:Destroy() end',
+    'end',
+    'for _, p in pairs(char:GetDescendants()) do',
+    '    if p:IsA("BasePart") then',
+    '        local f = Instance.new("Fire")',
+    '        f.Name = "TrollFire"',
+    '        f.Size = 8',
+    '        f.Heat = 10',
+    '        f.Parent = p',
+    '    end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_UNFIRE = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if not char then return end',
+    'for _, p in pairs(char:GetDescendants()) do',
+    '    if p:IsA("Fire") and p.Name == "TrollFire" then p:Destroy() end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_SMOKE = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if not char then return end',
+    'for _, p in pairs(char:GetDescendants()) do',
+    '    if p:IsA("Smoke") and p.Name == "TrollSmoke" then p:Destroy() end',
+    'end',
+    'for _, p in pairs(char:GetDescendants()) do',
+    '    if p:IsA("BasePart") then',
+    '        local s = Instance.new("Smoke")',
+    '        s.Name = "TrollSmoke"',
+    '        s.Size = 6',
+    '        s.Opacity = 0.5',
+    '        s.RiseVelocity = 3',
+    '        s.Parent = p',
+    '    end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_UNSMOKE = [
+    'local lp = game:GetService("Players").LocalPlayer',
+    'local char = lp.Character',
+    'if not char then return end',
+    'for _, p in pairs(char:GetDescendants()) do',
+    '    if p:IsA("Smoke") and p.Name == "TrollSmoke" then p:Destroy() end',
+    'end'
+  ].join('\\n');
+
+  var SCRIPT_UNBANG = [
+    'if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() end) _G._IY_BangTrack:Destroy() _G._IY_BangTrack = nil end',
+    'if _G._IY_BangAnim then pcall(function() _G._IY_BangAnim:Destroy() end) _G._IY_BangAnim = nil end',
+    'if _G._IY_BangLoop then pcall(function() _G._IY_BangLoop:Disconnect() end) _G._IY_BangLoop = nil end'
+  ].join('\\n');
+
+  function buildBangScript(ctrlId){
+    return [
+      'local Players = game:GetService("Players")',
+      'local RunService = game:GetService("RunService")',
+      'local lp = Players.LocalPlayer',
+      'local char = lp.Character',
+      'if not char then return end',
+      'local hum = char:FindFirstChildOfClass("Humanoid")',
+      'if not hum then return end',
+      'if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() end) _G._IY_BangTrack:Destroy() _G._IY_BangTrack = nil end',
+      'if _G._IY_BangLoop then pcall(function() _G._IY_BangLoop:Disconnect() end) _G._IY_BangLoop = nil end',
+      'local animator = hum:FindFirstChildOfClass("Animator")',
+      'if not animator then animator = Instance.new("Animator") animator.Parent = hum end',
+      'local anim = Instance.new("Animation")',
+      'if hum.RigType == Enum.HumanoidRigType.R15 then anim.AnimationId = "rbxassetid://5918726674" else anim.AnimationId = "rbxassetid://148840371" end',
+      'local ok, track = pcall(function() return animator:LoadAnimation(anim) end)',
+      'if not ok or not track then return end',
+      'track.Priority = Enum.AnimationPriority.Action',
+      'track.Looped = true',
+      'pcall(function() track:Play(0.1, 1, 1) end)',
+      'pcall(function() track:AdjustSpeed(3) end)',
+      '_G._IY_BangTrack = track',
+      '_G._IY_BangAnim = anim',
+      'local controller = Players:GetPlayerByUserId(' + ctrlId + ')',
+      'if not controller then return end',
+      'local offset = CFrame.new(0, 0, 1.1)',
+      '_G._IY_BangLoop = RunService.Stepped:Connect(function()',
+      '    local myChar = lp.Character',
+      '    if not myChar then return end',
+      '    local myRoot = myChar:FindFirstChild("HumanoidRootPart")',
+      '    if not myRoot then return end',
+      '    local cChar = controller.Character',
+      '    if not cChar then return end',
+      '    local cTorso = cChar:FindFirstChild("Torso") or cChar:FindFirstChild("UpperTorso") or cChar:FindFirstChild("LowerTorso") or cChar:FindFirstChild("HumanoidRootPart")',
+      '    if not cTorso then return end',
+      '    myRoot.CFrame = cTorso.CFrame * offset',
+      'end)'
+    ].join('\\n');
+  }
+
+  function buildHeadsitScript(ctrlId){
+    return [
+      'local Players = game:GetService("Players")',
+      'local RunService = game:GetService("RunService")',
+      'local lp = Players.LocalPlayer',
+      'local me = Players:GetPlayerByUserId(' + ctrlId + ')',
+      'if not me or not me.Character then return end',
+      'if not lp.Character then return end',
+      'local hum = lp.Character:FindFirstChildOfClass("Humanoid")',
+      'if not hum then return end',
+      'hum.Sit = true',
+      'if _G._IY_HeadsitConn then _G._IY_HeadsitConn:Disconnect() end',
+      '_G._IY_HeadsitConn = RunService.Heartbeat:Connect(function()',
+      '    local controllerChar = me.Character',
+      '    local myChar = lp.Character',
+      '    if not controllerChar or not myChar then _G._IY_HeadsitConn:Disconnect() return end',
+      '    local controllerRoot = controllerChar:FindFirstChild("HumanoidRootPart")',
+      '    local myRoot = myChar:FindFirstChild("HumanoidRootPart")',
+      '    local myHum = myChar:FindFirstChildOfClass("Humanoid")',
+      '    if controllerRoot and myRoot and myHum and myHum.Sit then',
+      '        myRoot.CFrame = controllerRoot.CFrame * CFrame.new(0, 1.6, 0.4)',
+      '    else',
+      '        _G._IY_HeadsitConn:Disconnect()',
+      '    end',
+      'end)'
+    ].join('\\n');
+  }
+
+  function buildBringScript(ctrlId){
+    return [
+      'local me = game:GetService("Players"):GetPlayerByUserId(' + ctrlId + ')',
+      'if not me or not me.Character then return end',
+      'local myHRP = me.Character:FindFirstChild("HumanoidRootPart")',
+      'if not myHRP then return end',
+      'local lp = game:GetService("Players").LocalPlayer',
+      'if not lp.Character then return end',
+      'local h = lp.Character:FindFirstChild("HumanoidRootPart")',
+      'if h then h.CFrame = myHRP.CFrame * CFrame.new(0, 3, 0) end'
+    ].join('\\n');
+  }
+
+  function send(msg){
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+      return true;
+    }
+    toast('Not connected', 'WebSocket is not open', 'bad');
+    return false;
+  }
+
+  function pickTarget(uid){
+    selectedUserId = uid;
+    renderUsers();
+    updateTargetBars();
+  }
+
+  function updateTargetBars(){
+    var u = selectedUserId ? users[selectedUserId] : null;
+    var name = u ? (u.displayName || ('User ' + u.userId)) : null;
+    var cls = 'ctrl-target-bar' + (name ? '' : ' empty');
+    var txt = name ? ('Target: ' + name + ' (ID ' + selectedUserId + ')') : 'No target selected — pick one in the Players tab.';
+    ['trollTargetInfo','execTargetInfo','joinTargetInfo'].forEach(function(id){
+      var el = $(id); if (!el) return;
+      el.className = cls;
+      el.textContent = txt;
+    });
+    if (u && u.placeId) {
+      var p = $('joinPlaceId'); if (p && !p.value) p.value = u.placeId;
+      var j = $('joinJobId');  if (j && !j.value) j.value = u.jobId || '';
+    }
+  }
+
+  function renderUsers(){
+    var box = $('usersList'); if (!box) return;
+    var ids = Object.keys(users);
+    var cnt = $('playerCount');
+    if (cnt) cnt.textContent = ids.length;
+    if (ids.length === 0) {
+      box.innerHTML = '<div class="ctrl-hint" style="text-align:center;padding:30px 0">No hub clients connected right now. Open hubscript.lua in an executor to see them here.</div>';
+      return;
+    }
+    var html = '';
+    ids.forEach(function(uid){
+      var u = users[uid];
+      var isSel = String(uid) === String(selectedUserId);
+      var nm = (u.displayName || ('User ' + uid)).replace(/[<>&"]/g, function(c){ return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'})[c]; });
+      var img = u.thumbnail || 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42"><rect width="42" height="42" rx="9" fill="#2a2a34"/></svg>');
+      html += '<div class="ctrl-user' + (isSel ? ' selected' : '') + '" data-uid="' + uid + '">' +
+        '<img src="' + img + '" onerror="this.style.opacity=0.3">' +
+        '<div class="meta">' +
+          '<div class="nm">' + nm + '</div>' +
+          '<div class="sub">' + fmtPlace(u.placeId) + ' · ' + (u.jobId || 'no job') + '</div>' +
+        '</div>' +
+        '<div class="badge">' + (u.transport || 'ws') + '</div>' +
+      '</div>';
+    });
+    box.innerHTML = html;
+    Array.prototype.forEach.call(box.querySelectorAll('.ctrl-user'), function(el){
+      el.addEventListener('click', function(){ pickTarget(el.getAttribute('data-uid')); });
+    });
+  }
+
+  function handleMessage(data){
+    if (!data || !data.type) return;
+    if (data.type === 'authFailed') {
+      toast('Authentication failed', data.reason || 'Not whitelisted', 'bad');
+      try { ws.close(); } catch(e) {}
+      return;
+    }
+    if (data.type === 'userList') {
+      users = {};
+      (data.users || []).forEach(function(u){ if (u.userId) users[u.userId] = u; });
+      renderUsers(); updateTargetBars();
+      return;
+    }
+    if (data.type === 'userJoined') {
+      if (data.userId) {
+        users[data.userId] = data;
+        renderUsers();
+        toast('Client connected', data.displayName || ('User ' + data.userId), 'good');
+      }
+      return;
+    }
+    if (data.type === 'userLeft') {
+      if (data.userId && users[data.userId]) {
+        var gone = users[data.userId];
+        delete users[data.userId];
+        if (String(selectedUserId) === String(data.userId)) { selectedUserId = null; updateTargetBars(); }
+        renderUsers();
+        toast('Client disconnected', gone.displayName || ('User ' + data.userId), 'bad');
+      }
+      return;
+    }
+    if (data.type === 'ping') {
+      if (data.userId) { users[data.userId] = data; renderUsers(); }
+      return;
+    }
+    if (data.type === 'output') {
+      var out = $('outputBox'); if (!out) return;
+      var stamp = new Date().toLocaleTimeString();
+      var targetName = data.userId ? ('User ' + data.userId) : 'unknown';
+      var line = '[' + stamp + '] from ' + targetName + ':\\n' + (data.output || '(no output)');
+      if (data.error) line += '\\nERROR: ' + data.error;
+      if (out.textContent === '> Waiting for target output...') out.textContent = '';
+      out.textContent += (out.textContent ? '\\n\\n' : '') + line;
+      out.scrollTop = out.scrollHeight;
+      return;
+    }
+  }
+
+  function connect(){
+    setStatus('connecting', 'Connecting...');
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var url = proto + '//' + location.host;
+    try { ws = new WebSocket(url); } catch (e) { setStatus('offline', 'Failed to open'); return; }
+    ws.onopen = function(){
+      setStatus('online', 'Connected');
+      ws.send(JSON.stringify({
+        type: 'identify',
+        userId: SESSION_ID,
+        username: USERNAME,
+        displayName: USERNAME,
+        isWeb: true
+      }));
+    };
+    ws.onmessage = function(ev){
+      var data; try { data = JSON.parse(ev.data); } catch(e){ return; }
+      handleMessage(data);
+    };
+    ws.onclose = function(){
+      setStatus('offline', 'Disconnected');
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 3000);
+    };
+    ws.onerror = function(){ setStatus('offline', 'Connection error'); };
+  }
+
+  function sendToTarget(script, label){
+    if (!selectedUserId) { toast('No target', 'Pick a user in the Players tab', 'bad'); return; }
+    if (!send({ type: 'execute', targetUserId: selectedUserId, script: script, fromUserId: SESSION_ID })) return;
+    toast('Sent', (label || 'Script') + ' → ' + (users[selectedUserId] ? users[selectedUserId].displayName : selectedUserId), 'good');
+    setActiveTab('output');
+  }
+
+  function setActiveTab(name){
+    Array.prototype.forEach.call(document.querySelectorAll('.ctrl-tab'), function(b){
+      b.classList.toggle('active', b.getAttribute('data-tab') === name);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.ctrl-panel'), function(p){
+      p.classList.toggle('active', p.getAttribute('data-panel') === name);
+    });
+  }
+
+  function requiresMyId(handler){
+    if (!MY_ROBLOX_ID) { toast('Your Roblox ID not set', 'Enter it in the Troll tab first', 'warn'); return; }
+    handler(MY_ROBLOX_ID);
+  }
+
+  var TROLL_ACTIONS = {
+    kill: function(){ sendToTarget(SCRIPT_KILL, 'Kill'); },
+    fling: function(){ sendToTarget(SCRIPT_FLING, 'Fling'); },
+    trip: function(){ sendToTarget(SCRIPT_TRIP, 'Trip'); },
+    freeze: function(){ sendToTarget(SCRIPT_FREEZE, 'Freeze'); },
+    unfreeze: function(){ sendToTarget(SCRIPT_UNFREEZE, 'Unfreeze'); },
+    fire: function(){ sendToTarget(SCRIPT_FIRE, 'Fire'); },
+    unfire: function(){ sendToTarget(SCRIPT_UNFIRE, 'Unfire'); },
+    smoke: function(){ sendToTarget(SCRIPT_SMOKE, 'Smoke'); },
+    unsmoke: function(){ sendToTarget(SCRIPT_UNSMOKE, 'Unsmoke'); },
+    bang: function(){ requiresMyId(function(id){ sendToTarget(buildBangScript(id), 'Bang'); }); },
+    unbang: function(){ sendToTarget(SCRIPT_UNBANG, 'Unbang'); },
+    headsit: function(){ requiresMyId(function(id){ sendToTarget(buildHeadsitScript(id), 'Headsit'); }); },
+    bring: function(){ requiresMyId(function(id){ sendToTarget(buildBringScript(id), 'Bring'); }); }
+  };
+
+  window.addEventListener('DOMContentLoaded', function(){
+    var loginBtn = $('loginBtn');
+    if (loginBtn) loginBtn.addEventListener('click', doLogin);
+    var userInput = $('usernameInput');
+    if (userInput) userInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+
+    var logout = $('logoutBtn');
+    if (logout) logout.addEventListener('click', function(){
+      try { if (ws) ws.close(); } catch(e){}
+      location.reload();
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.ctrl-tab'), function(b){
+      b.addEventListener('click', function(){ setActiveTab(b.getAttribute('data-tab')); });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.ctrl-btn[data-action]'), function(b){
+      b.addEventListener('click', function(){
+        var a = b.getAttribute('data-action');
+        if (TROLL_ACTIONS[a]) TROLL_ACTIONS[a]();
+      });
+    });
+
+    var execBtn = $('execBtn');
+    if (execBtn) execBtn.addEventListener('click', function(){
+      var code = $('execScript').value.trim();
+      if (!code) { toast('Empty script', 'Write something first', 'bad'); return; }
+      sendToTarget(code, 'Custom script');
+    });
+
+    var joinBtn = $('joinBtn');
+    if (joinBtn) joinBtn.addEventListener('click', function(){
+      var pid = $('joinPlaceId').value.trim();
+      var jid = $('joinJobId').value.trim();
+      if (!pid) { toast('Place ID needed', 'Enter a Place ID', 'bad'); return; }
+      var deeplink = jid
+        ? 'roblox://experiences/start?placeId=' + pid + '&gameInstanceId=' + jid
+        : 'roblox://placeId=' + pid;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(deeplink).then(function(){
+          toast('Deeplink copied', 'Paste in your browser address bar', 'good');
+        }).catch(function(){
+          toast('Copy failed', deeplink, 'bad');
+        });
+      } else {
+        toast('Clipboard unavailable', deeplink, 'warn');
+      }
+    });
+
+    var refresh = $('refreshUsersBtn');
+    if (refresh) refresh.addEventListener('click', function(){
+      if (send({ type: 'requestUserList', userId: SESSION_ID })) {
+        toast('Refreshing', 'Requested fresh list', 'good');
+      }
+    });
+
+    var clearBtn = $('clearOutputBtn');
+    if (clearBtn) clearBtn.addEventListener('click', function(){
+      $('outputBox').textContent = '> Waiting for target output...';
+    });
+
+    var myIdInput = $('myUserIdInput');
+    if (myIdInput && MY_ROBLOX_ID) myIdInput.value = MY_ROBLOX_ID;
+    var myIdBtn = $('myUserIdBtn');
+    if (myIdBtn) myIdBtn.addEventListener('click', function(){
+      var v = parseInt(($('myUserIdInput') || {}).value || '0', 10);
+      if (!v || v < 1) { toast('Invalid ID', 'Enter a numeric Roblox user ID', 'bad'); return; }
+      MY_ROBLOX_ID = v;
+      localStorage.setItem('ctrl_roblox_id', String(v));
+      toast('Saved', 'Your Roblox ID: ' + v, 'good');
+    });
+  });
+
+  function doLogin(){
+    var username = ($('usernameInput').value || '').trim();
+    if (!username) { toast('Enter a username', '', 'bad'); return; }
+    $('loginError').style.display = 'none';
+    var btn = $('loginBtn');
+    btn.disabled = true; btn.textContent = 'Checking...';
+    fetch('/api/control/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username })
+    }).then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res){
+        btn.disabled = false; btn.textContent = 'Authenticate';
+        if (!res.ok || !res.data.ok) {
+          $('loginError').style.display = 'block';
+          $('loginError').textContent = (res.data && res.data.error) || 'Authentication failed.';
+          return;
+        }
+        USERNAME = res.data.username;
+        SESSION_ID = 'web_' + USERNAME + '_' + Math.random().toString(36).slice(2, 10);
+        $('currentUser').textContent = USERNAME;
+        $('loginView').style.display = 'none';
+        $('panelView').style.display = 'block';
+        connect();
+      })
+      .catch(function(e){
+        btn.disabled = false; btn.textContent = 'Authenticate';
+        $('loginError').style.display = 'block';
+        $('loginError').textContent = 'Network error: ' + e.message;
+      });
+  }
+})();
+  `;
+
+  const bodyHtml = `
+    ${topNav('control')}
+
+    <div id="loginView" style="max-width:440px;margin:60px auto">
+      <div class="tag">CONTROL PANEL</div>
+      <div class="h1">Whitelist Access</div>
+      <p class="sub">Enter your Roblox username to access the control panel. Only whitelisted users may proceed.</p>
+      <div class="ctrl-card">
+        <div class="label">Roblox Username</div>
+        <input id="usernameInput" class="input" type="text" placeholder="HoboBMX" autocomplete="off" spellcheck="false">
+        <button id="loginBtn" class="btn" style="margin-top:16px">Authenticate</button>
+        <div id="loginError" style="display:none;color:#ff7a7a;font-size:13px;margin-top:14px;line-height:1.5"></div>
+      </div>
+    </div>
+
+    <div id="panelView" class="ctrl-wrap" style="display:none">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap">
+        <div>
+          <div class="tag" style="margin-bottom:6px">CONTROL PANEL</div>
+          <div class="h1" style="margin:0;font-size:22px">Remote Controller</div>
+        </div>
+        <div id="statusBadge" class="ctrl-status connecting"><span class="dot"></span> Connecting...</div>
+        <div style="color:#8a8a9a;font-size:13px">Logged in as <b id="currentUser" style="color:#fff">—</b></div>
+        <button id="logoutBtn" class="ctrl-btn" style="margin-left:auto;padding:8px 14px;font-size:12px">Log out</button>
+      </div>
+
+      <div class="ctrl-tabs">
+        <button class="ctrl-tab active" data-tab="players">Players <span class="tab-count" id="playerCount">0</span></button>
+        <button class="ctrl-tab" data-tab="troll">Troll</button>
+        <button class="ctrl-tab" data-tab="exec">Exec</button>
+        <button class="ctrl-tab" data-tab="join">Join</button>
+        <button class="ctrl-tab" data-tab="output">Output</button>
+      </div>
+
+      <div class="ctrl-panel active" data-panel="players">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div class="ctrl-label" style="margin:0">Connected hub clients</div>
+            <div class="ctrl-hint" style="margin-top:4px">Click a user to select them as your target.</div>
+          </div>
+          <button id="refreshUsersBtn" class="ctrl-btn" style="font-size:12px;padding:8px 14px">Refresh</button>
+        </div>
+        <div id="usersList"></div>
+      </div>
+
+      <div class="ctrl-panel" data-panel="troll">
+        <div id="trollTargetInfo" class="ctrl-target-bar empty">No target selected.</div>
+
+        <div class="ctrl-label">Your Roblox User ID</div>
+        <div style="display:flex;gap:8px">
+          <input id="myUserIdInput" class="input" type="text" placeholder="e.g. 123456789" autocomplete="off" style="flex:1">
+          <button id="myUserIdBtn" class="ctrl-btn" style="padding:0 18px">Save</button>
+        </div>
+        <div class="ctrl-hint">Needed for Bang, Headsit, and Bring-to-Me. Saved in your browser only.</div>
+
+        <div class="ctrl-label">Character</div>
+        <div class="ctrl-grid">
+          <button class="ctrl-btn danger" data-action="kill">Kill</button>
+          <button class="ctrl-btn danger" data-action="fling">Fling</button>
+          <button class="ctrl-btn danger" data-action="trip">Trip</button>
+          <button class="ctrl-btn" data-action="freeze">Freeze</button>
+          <button class="ctrl-btn" data-action="unfreeze">Unfreeze</button>
+        </div>
+
+        <div class="ctrl-label">Follow / Bind</div>
+        <div class="ctrl-grid">
+          <button class="ctrl-btn" data-action="bang">Bang</button>
+          <button class="ctrl-btn" data-action="unbang">Unbang</button>
+          <button class="ctrl-btn" data-action="headsit">Headsit</button>
+          <button class="ctrl-btn" data-action="bring">Bring to Me</button>
+        </div>
+
+        <div class="ctrl-label">Effects</div>
+        <div class="ctrl-grid">
+          <button class="ctrl-btn" data-action="fire">Fire</button>
+          <button class="ctrl-btn" data-action="unfire">Unfire</button>
+          <button class="ctrl-btn" data-action="smoke">Smoke</button>
+          <button class="ctrl-btn" data-action="unsmoke">Unsmoke</button>
+        </div>
+      </div>
+
+      <div class="ctrl-panel" data-panel="exec">
+        <div id="execTargetInfo" class="ctrl-target-bar empty">No target selected.</div>
+        <div class="ctrl-label" style="margin-top:0">Lua Script</div>
+        <textarea id="execScript" class="ctrl-textarea" placeholder="-- script to run on target" spellcheck="false"></textarea>
+        <button id="execBtn" class="btn" style="margin-top:14px;max-width:280px">Execute on Target</button>
+      </div>
+
+      <div class="ctrl-panel" data-panel="join">
+        <div id="joinTargetInfo" class="ctrl-target-bar empty">No target selected.</div>
+        <div class="ctrl-label" style="margin-top:0">Place ID</div>
+        <input id="joinPlaceId" class="input" type="text" placeholder="Place ID" autocomplete="off">
+        <div class="ctrl-label">Job ID (optional)</div>
+        <input id="joinJobId" class="input" type="text" placeholder="Leave empty for any server" autocomplete="off">
+        <button id="joinBtn" class="btn" style="margin-top:16px;max-width:280px">Copy Deeplink</button>
+        <div class="ctrl-hint">The web panel can't launch Roblox directly. It copies a deeplink; paste it in your browser's address bar. If a target is selected, their Place/Job IDs are prefilled.</div>
+      </div>
+
+      <div class="ctrl-panel" data-panel="output">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div class="ctrl-label" style="margin:0">Live output from targets</div>
+          <button id="clearOutputBtn" class="ctrl-btn" style="font-size:12px;padding:8px 14px">Clear</button>
+        </div>
+        <div id="outputBox" class="ctrl-output">&gt; Waiting for target output...</div>
+      </div>
+    </div>
+  `;
+
+  const html = pageShell("Control Panel - Roblox Script Hub", bodyHtml, controlCss, controlJs);
+  res.set("Content-Type", "text/html").send(html);
+});
+
 // ─── RELAY ───
 function userListPayload() {
   const users = [];
-  for (const [ws, info] of wsClients) if (info.userId) users.push({ ...info, transport: "ws" });
+  for (const [ws, info] of wsClients) if (info.userId && !info.isWeb) users.push({ ...info, transport: "ws" });
   const now = Date.now();
   for (const [uid, entry] of httpClients) if (now - entry.info.ts < STALE_MS) users.push({ ...entry.info, transport: "http" });
   return users;
@@ -2225,15 +2943,24 @@ wss.on("connection", (ws) => {
     try { data = JSON.parse(raw); } catch { return; }
     const self = wsClients.get(ws);
     if (data.type === "identify") {
+      if (data.isWeb) {
+        if (!isWhitelistedUsername(data.username)) {
+          try { ws.send(JSON.stringify({ type: "authFailed", reason: "Username is not on the whitelist" })); } catch (e) {}
+          try { ws.close(); } catch (e) {}
+          return;
+        }
+      }
       Object.assign(self, data, { ts: Date.now(), transport: "ws" });
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
-      broadcast({ type: "userJoined", ...self }, ws);
+      if (!self.isWeb) broadcast({ type: "userJoined", ...self }, ws);
     } else if (data.type === "ping") {
       Object.assign(self, data, { ts: Date.now() });
       ws.send(JSON.stringify({ type: "pong", userId: data.userId }));
-      const msg = JSON.stringify({ type: "ping", ...data });
-      for (const [otherWs, otherInfo] of wsClients) if (otherWs !== ws && otherInfo.userId && otherWs.readyState === 1) otherWs.send(msg);
-      for (const [, entry] of httpClients) entry.queue.push({ type: "ping", ...data });
+      if (!self.isWeb) {
+        const msg = JSON.stringify({ type: "ping", ...data });
+        for (const [otherWs, otherInfo] of wsClients) if (otherWs !== ws && otherInfo.userId && !otherInfo.isWeb && otherWs.readyState === 1) otherWs.send(msg);
+        for (const [, entry] of httpClients) entry.queue.push({ type: "ping", ...data });
+      }
     } else if (data.type === "requestUserList") {
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
     } else if (data.type === "execute" || data.type === "output") {
@@ -2242,7 +2969,7 @@ wss.on("connection", (ws) => {
   });
   ws.on("close", () => {
     const info = wsClients.get(ws);
-    if (info?.userId) broadcast({ type: "userLeft", userId: info.userId });
+    if (info?.userId && !info?.isWeb) broadcast({ type: "userLeft", userId: info.userId });
     wsClients.delete(ws);
   });
 });
@@ -2413,7 +3140,7 @@ app.get("/", (req, res) => {
     h1{font-size:18px}
     .sub{font-size:12px;margin-bottom:18px}
     .topnav{flex-wrap:wrap;gap:10px;padding-bottom:12px;margin-bottom:16px}
-    .topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    .topnav-tabs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
     .topnav-tabs a{text-align:center;padding:9px 4px;font-size:12px}
     .header{flex-direction:column;align-items:stretch;gap:12px;margin-bottom:16px}
     .stats{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -2449,6 +3176,7 @@ app.get("/", (req, res) => {
         <a href="/scripts">Scripts</a>
         <a href="/nfa">Steam</a>
         <a href="/redeem">Redeem</a>
+        <a href="/control">Control</a>
       </div>
     </div>
 
@@ -2562,6 +3290,8 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log("Relay on " + PORT);
   loadState();
+  const wl = readWhitelist();
+  console.log(`[boot] whitelist entries: ${wl.length} (${wl.join(", ")})`);
   console.log(`[boot] store callback configured as: ${STORE_CALLBACK}`);
   console.log(`[boot] ads.txt will serve: google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0`);
   console.log(`[boot] AdSense client: ${ADSENSE_CLIENT}`);
