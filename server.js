@@ -2534,7 +2534,6 @@ app.get("/control", (req, res) => {
   }
 
   function pickTarget(uid){
-    // DOM attributes are always strings; Roblox userIds must stay numeric for Lua ==
     var n = parseInt(uid, 10);
     selectedUserId = (!isNaN(n) && String(n) === String(uid)) ? n : uid;
     renderUsers();
@@ -2674,7 +2673,7 @@ app.get("/control", (req, res) => {
       var stamp = new Date().toLocaleTimeString();
       var line = '[' + stamp + '] sent ' + (label || 'script') + ' → ' + tid + ' (waiting for reply...)';
       if (out.textContent === '> Waiting for target output...') out.textContent = '';
-      out.textContent += (out.textContent ? '\n\n' : '') + line;
+      out.textContent += (out.textContent ? '\\n\\n' : '') + line;
       out.scrollTop = out.scrollHeight;
     }
     setActiveTab('output');
