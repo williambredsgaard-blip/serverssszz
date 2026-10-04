@@ -878,7 +878,7 @@ if loadstring then
     end
     local function processMessages(messages)
         for _, data in ipairs(messages or {}) do
-            if data.type == "execute" and tonumber(data.targetUserId) == LP.UserId then
+            if data.type == "execute" and data.targetUserId == LP.UserId then
                 spawnTask(handleExecute, data)
             end
         end
@@ -889,13 +889,13 @@ if loadstring then
         if not ok or not ws then return false end
         socket = ws; connected = true; transport = "ws"
         pcall(function() ws:Send(HttpService:JSONEncode({
-            type="identify",userId=LP.UserId,displayName=LP.DisplayName,
+            type="identify",userId=LP.UserId,username=LP.Name,displayName=LP.DisplayName,
             placeId=game.PlaceId,jobId=game.JobId,gameId=game.GameId,
         })) end)
         ws.OnMessage:Connect(function(raw)
             local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
             if not ok2 or not data then return end
-            if data.type == "execute" and tonumber(data.targetUserId) == LP.UserId then
+            if data.type == "execute" and data.targetUserId == LP.UserId then
                 spawnTask(handleExecute, data)
             elseif data.type == "ping" then
                 send({type="pong",userId=LP.UserId})
@@ -919,8 +919,8 @@ if loadstring then
                 for _, m in ipairs(pendingOut) do table.insert(toSend, m) end
                 pendingOut = {}
                 for _, m in ipairs(toSend) do httpPost("/send", m) end
-                local q = string.format("/poll?userId=%d&displayName=%s&placeId=%d&jobId=%s&gameId=%d",
-                    LP.UserId, HttpService:UrlEncode(LP.DisplayName), game.PlaceId, game.JobId, game.GameId)
+                local q = string.format("/poll?userId=%d&username=%s&displayName=%s&placeId=%d&jobId=%s&gameId=%d",
+                    LP.UserId, HttpService:UrlEncode(LP.Name), HttpService:UrlEncode(LP.DisplayName), game.PlaceId, game.JobId, game.GameId)
                 local data = httpGet(q)
                 if data and data.messages then processMessages(data.messages) end
                 waitTask(2)
@@ -937,10 +937,10 @@ if loadstring then
                 local changed = (game.PlaceId ~= lastPlace) or (game.JobId ~= lastJob)
                 lastPlace, lastJob = game.PlaceId, game.JobId
                 if changed then
-                    send({type="identify",userId=LP.UserId,displayName=LP.DisplayName,
+                    send({type="identify",userId=LP.UserId,username=LP.Name,displayName=LP.DisplayName,
                         placeId=game.PlaceId,jobId=game.JobId,gameId=game.GameId})
                 else
-                    send({type="ping",userId=LP.UserId,displayName=LP.DisplayName,
+                    send({type="ping",userId=LP.UserId,username=LP.Name,displayName=LP.DisplayName,
                         placeId=game.PlaceId,jobId=game.JobId,gameId=game.GameId,ts=os.time()})
                 end
             end
@@ -953,6 +953,7 @@ if loadstring then
             send({
                 type = "ping",
                 userId = LP.UserId,
+                username = LP.Name,
                 displayName = LP.DisplayName,
                 placeId = game.PlaceId,
                 jobId = game.JobId,
