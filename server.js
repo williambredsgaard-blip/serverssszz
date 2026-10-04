@@ -108,7 +108,7 @@ function fmtCount(n) {
   return String(n);
 }
 
-// ─── WHITELIST READER (used by both Lua controller and web control panel) ───
+// ─── WHITELIST READER ───
 function readWhitelist() {
   const paths = [__dirname, path.join(__dirname, "scripts"), path.join(__dirname, "public"), process.cwd()];
   for (const dir of paths) {
@@ -2813,7 +2813,7 @@ app.get("/control", (req, res) => {
       <p class="sub">Enter your Roblox username to access the control panel. Only whitelisted users may proceed.</p>
       <div class="ctrl-card">
         <div class="label">Roblox Username</div>
-        <input id="usernameInput" class="input" type="text" placeholder="HoboBMX" autocomplete="off" spellcheck="false">
+        <input id="usernameInput" class="input" type="text" placeholder="Your Roblox username" autocomplete="off" spellcheck="false">
         <button id="loginBtn" class="btn" style="margin-top:16px">Authenticate</button>
         <div id="loginError" style="display:none;color:#ff7a7a;font-size:13px;margin-top:14px;line-height:1.5"></div>
       </div>
@@ -2929,10 +2929,19 @@ function broadcast(obj, excludeWs) {
   for (const [ws] of wsClients) if (ws !== excludeWs && ws.readyState === 1) ws.send(msg);
   for (const [, entry] of httpClients) entry.queue.push(obj);
 }
+// ─── FIXED: string-normalized target lookup so "12345" matches 12345 ───
 function deliverTo(targetUserId, obj) {
-  for (const [ws, info] of wsClients) if (info.userId === targetUserId && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
-  const entry = httpClients.get(targetUserId);
-  if (entry) { entry.queue.push(obj); return true; }
+  if (targetUserId == null) return false;
+  const target = String(targetUserId);
+  for (const [ws, info] of wsClients) {
+    if (info.userId != null && String(info.userId) === target && ws.readyState === 1) {
+      ws.send(JSON.stringify(obj));
+      return true;
+    }
+  }
+  for (const [uid, entry] of httpClients) {
+    if (String(uid) === target) { entry.queue.push(obj); return true; }
+  }
   return false;
 }
 
