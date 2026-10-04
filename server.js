@@ -2534,7 +2534,9 @@ app.get("/control", (req, res) => {
   }
 
   function pickTarget(uid){
-    selectedUserId = uid;
+    // DOM attributes are always strings; Roblox userIds must stay numeric for Lua ==
+    var n = parseInt(uid, 10);
+    selectedUserId = (!isNaN(n) && String(n) === String(uid)) ? n : uid;
     renderUsers();
     updateTargetBars();
   }
@@ -2662,8 +2664,19 @@ app.get("/control", (req, res) => {
 
   function sendToTarget(script, label){
     if (!selectedUserId) { toast('No target', 'Pick a user in the Players tab', 'bad'); return; }
-    if (!send({ type: 'execute', targetUserId: selectedUserId, script: script, fromUserId: SESSION_ID })) return;
+    var tid = selectedUserId;
+    var n = parseInt(tid, 10);
+    if (!isNaN(n) && String(n) === String(tid)) tid = n;
+    if (!send({ type: 'execute', targetUserId: tid, script: script, fromUserId: SESSION_ID })) return;
     toast('Sent', (label || 'Script') + ' → ' + (users[selectedUserId] ? users[selectedUserId].displayName : selectedUserId), 'good');
+    var out = $('outputBox');
+    if (out) {
+      var stamp = new Date().toLocaleTimeString();
+      var line = '[' + stamp + '] sent ' + (label || 'script') + ' → ' + tid + ' (waiting for reply...)';
+      if (out.textContent === '> Waiting for target output...') out.textContent = '';
+      out.textContent += (out.textContent ? '\n\n' : '') + line;
+      out.scrollTop = out.scrollHeight;
+    }
     setActiveTab('output');
   }
 
@@ -2973,7 +2986,18 @@ wss.on("connection", (ws) => {
     } else if (data.type === "requestUserList") {
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
     } else if (data.type === "execute" || data.type === "output") {
-      deliverTo(data.targetUserId, data);
+      const delivered = deliverTo(data.targetUserId, data);
+      if (data.type === "execute" && !delivered) {
+        try {
+          ws.send(JSON.stringify({
+            type: "output",
+            targetUserId: data.fromUserId,
+            userId: data.targetUserId,
+            output: "(not delivered)",
+            error: "Target is offline or not connected to the relay"
+          }));
+        } catch (e) {}
+      }
     }
   });
   ws.on("close", () => {
@@ -3002,7 +3026,19 @@ app.get("/poll", (req, res) => {
 app.post("/send", (req, res) => {
   const msg = req.body;
   if (!msg || !msg.type) return res.json({ ok: false });
-  if (msg.type === "execute" || msg.type === "output") { deliverTo(msg.targetUserId, msg); return res.json({ ok: true }); }
+  if (msg.type === "execute" || msg.type === "output") {
+    const delivered = deliverTo(msg.targetUserId, msg);
+    if (msg.type === "execute" && !delivered && msg.fromUserId != null) {
+      deliverTo(msg.fromUserId, {
+        type: "output",
+        targetUserId: msg.fromUserId,
+        userId: msg.targetUserId,
+        output: "(not delivered)",
+        error: "Target is offline or not connected to the relay"
+      });
+    }
+    return res.json({ ok: true, delivered: !!delivered });
+  }
   if (msg.type === "ping" || msg.type === "identify") {
     const entry = httpClients.get(msg.userId);
     if (entry) { Object.assign(entry.info, msg, { ts: Date.now() }); broadcast(msg, null); }
