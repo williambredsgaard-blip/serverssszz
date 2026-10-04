@@ -401,11 +401,9 @@ async function getThumbnails(userIds) {
         seen.add(entry.targetId);
         if (entry.state === "Completed" && entry.imageUrl) {
           result[entry.targetId] = entry.imageUrl;
-          result[String(entry.targetId)] = entry.imageUrl;
           thumbCache.set(entry.targetId, { url: entry.imageUrl, at: now });
         } else {
           result[entry.targetId] = null;
-          result[String(entry.targetId)] = null;
           thumbCache.set(entry.targetId, { url: null, at: now });
         }
       }
@@ -2281,7 +2279,7 @@ app.get("/control", (req, res) => {
 (function(){
   var SESSION_ID = null;
   var USERNAME = null;
-  var MY_ROBLOX_ID = null;
+  var MY_ROBLOX_ID = parseInt(localStorage.getItem('ctrl_roblox_id') || '0', 10) || null;
   var ws = null;
   var users = {};
   var selectedUserId = null;
@@ -2445,7 +2443,7 @@ app.get("/control", (req, res) => {
     'if _G._IY_BangLoop then pcall(function() _G._IY_BangLoop:Disconnect() end) _G._IY_BangLoop = nil end'
   ].join('\\n');
 
-  function buildBangScript(ctrlId){
+  function buildBangScript(ctrlName){
     return [
       'local Players = game:GetService("Players")',
       'local RunService = game:GetService("RunService")',
@@ -2468,7 +2466,11 @@ app.get("/control", (req, res) => {
       'pcall(function() track:AdjustSpeed(3) end)',
       '_G._IY_BangTrack = track',
       '_G._IY_BangAnim = anim',
-      'local controller = Players:GetPlayerByUserId(' + ctrlId + ')',
+      'local want = string.lower("' + ctrlName + '")',
+      'local controller = nil',
+      'for _, plr in ipairs(Players:GetPlayers()) do',
+      '  if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then controller = plr break end',
+      'end',
       'if not controller then return end',
       'local offset = CFrame.new(0, 0, 1.1)',
       '_G._IY_BangLoop = RunService.Stepped:Connect(function()',
@@ -2485,12 +2487,16 @@ app.get("/control", (req, res) => {
     ].join('\\n');
   }
 
-  function buildHeadsitScript(ctrlId){
+  function buildHeadsitScript(ctrlName){
     return [
       'local Players = game:GetService("Players")',
       'local RunService = game:GetService("RunService")',
       'local lp = Players.LocalPlayer',
-      'local me = Players:GetPlayerByUserId(' + ctrlId + ')',
+      'local want = string.lower("' + ctrlName + '")',
+      'local me = nil',
+      'for _, plr in ipairs(Players:GetPlayers()) do',
+      '  if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then me = plr break end',
+      'end',
       'if not me or not me.Character then return end',
       'if not lp.Character then return end',
       'local hum = lp.Character:FindFirstChildOfClass("Humanoid")',
@@ -2513,9 +2519,14 @@ app.get("/control", (req, res) => {
     ].join('\\n');
   }
 
-  function buildBringScript(ctrlId){
+  function buildBringScript(ctrlName){
     return [
-      'local me = game:GetService("Players"):GetPlayerByUserId(' + ctrlId + ')',
+      'local Players = game:GetService("Players")',
+      'local want = string.lower("' + ctrlName + '")',
+      'local me = nil',
+      'for _, plr in ipairs(Players:GetPlayers()) do',
+      '  if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then me = plr break end',
+      'end',
       'if not me or not me.Character then return end',
       'local myHRP = me.Character:FindFirstChild("HumanoidRootPart")',
       'if not myHRP then return end',
@@ -2536,8 +2547,7 @@ app.get("/control", (req, res) => {
   }
 
   function pickTarget(uid){
-    var n = parseInt(uid, 10);
-    selectedUserId = (!isNaN(n) && String(n) === String(uid)) ? n : uid;
+    selectedUserId = uid;
     renderUsers();
     updateTargetBars();
   }
@@ -2586,38 +2596,6 @@ app.get("/control", (req, res) => {
     Array.prototype.forEach.call(box.querySelectorAll('.ctrl-user'), function(el){
       el.addEventListener('click', function(){ pickTarget(el.getAttribute('data-uid')); });
     });
-    ensureThumbnails();
-  }
-
-  var thumbFetchInFlight = false;
-  function ensureThumbnails(){
-    var missing = [];
-    Object.keys(users).forEach(function(uid){
-      var u = users[uid];
-      if (u && !u.thumbnail && !u._thumbTried) missing.push(uid);
-    });
-    if (!missing.length || thumbFetchInFlight) return;
-    thumbFetchInFlight = true;
-    fetch('/clients?t=' + Date.now()).then(function(r){ return r.json(); }).then(function(d){
-      thumbFetchInFlight = false;
-      var list = (d && d.users) || [];
-      var changed = false;
-      list.forEach(function(u){
-        if (!u || u.userId == null) return;
-        var key = null;
-        Object.keys(users).forEach(function(k){ if (String(k) === String(u.userId)) key = k; });
-        if (!key) return;
-        users[key]._thumbTried = true;
-        if (u.thumbnail && users[key].thumbnail !== u.thumbnail) {
-          users[key].thumbnail = u.thumbnail;
-          changed = true;
-        }
-      });
-      Object.keys(users).forEach(function(k){
-        if (!users[k].thumbnail) users[k]._thumbTried = true;
-      });
-      if (changed) renderUsers();
-    }).catch(function(){ thumbFetchInFlight = false; });
   }
 
   function handleMessage(data){
@@ -2635,9 +2613,7 @@ app.get("/control", (req, res) => {
     }
     if (data.type === 'userJoined') {
       if (data.userId) {
-        var prev = users[data.userId] || users[String(data.userId)];
         users[data.userId] = data;
-        if (prev && prev.thumbnail) users[data.userId].thumbnail = prev.thumbnail;
         renderUsers();
         toast('Client connected', data.displayName || ('User ' + data.userId), 'good');
       }
@@ -2654,12 +2630,7 @@ app.get("/control", (req, res) => {
       return;
     }
     if (data.type === 'ping') {
-      if (data.userId) {
-        var prevP = users[data.userId] || users[String(data.userId)];
-        users[data.userId] = data;
-        if (prevP && prevP.thumbnail) users[data.userId].thumbnail = prevP.thumbnail;
-        renderUsers();
-      }
+      if (data.userId) { users[data.userId] = data; renderUsers(); }
       return;
     }
     if (data.type === 'output') {
@@ -2667,10 +2638,7 @@ app.get("/control", (req, res) => {
       var stamp = new Date().toLocaleTimeString();
       var targetName = data.userId ? ('User ' + data.userId) : 'unknown';
       var line = '[' + stamp + '] from ' + targetName + ':\\n' + (data.output || '(no output)');
-      var err = data.error;
-      if (err && err !== 'nil' && err !== 'null' && String(err).toLowerCase() !== 'nil') {
-        line += '\\nERROR: ' + err;
-      }
+      if (data.error) line += '\\nERROR: ' + data.error;
       if (out.textContent === '> Waiting for target output...') out.textContent = '';
       out.textContent += (out.textContent ? '\\n\\n' : '') + line;
       out.scrollTop = out.scrollHeight;
@@ -2707,19 +2675,8 @@ app.get("/control", (req, res) => {
 
   function sendToTarget(script, label){
     if (!selectedUserId) { toast('No target', 'Pick a user in the Players tab', 'bad'); return; }
-    var tid = selectedUserId;
-    var n = parseInt(tid, 10);
-    if (!isNaN(n) && String(n) === String(tid)) tid = n;
-    if (!send({ type: 'execute', targetUserId: tid, script: script, fromUserId: SESSION_ID })) return;
+    if (!send({ type: 'execute', targetUserId: selectedUserId, script: script, fromUserId: SESSION_ID })) return;
     toast('Sent', (label || 'Script') + ' → ' + (users[selectedUserId] ? users[selectedUserId].displayName : selectedUserId), 'good');
-    var out = $('outputBox');
-    if (out) {
-      var stamp = new Date().toLocaleTimeString();
-      var line = '[' + stamp + '] sent ' + (label || 'script') + ' → ' + tid + ' (waiting for reply...)';
-      if (out.textContent === '> Waiting for target output...') out.textContent = '';
-      out.textContent += (out.textContent ? '\\n\\n' : '') + line;
-      out.scrollTop = out.scrollHeight;
-    }
     setActiveTab('output');
   }
 
@@ -2732,31 +2689,13 @@ app.get("/control", (req, res) => {
     });
   }
 
-  function resolveMyRobloxId(){
-    if (!USERNAME) return null;
-    var want = String(USERNAME).toLowerCase();
-    var ids = Object.keys(users);
-    for (var i = 0; i < ids.length; i++) {
-      var u = users[ids[i]];
-      if (!u) continue;
-      var un = (u.username || u.name || '').toLowerCase();
-      var dn = (u.displayName || '').toLowerCase();
-      if (un === want || dn === want) {
-        var id = parseInt(u.userId, 10);
-        if (id) return id;
-      }
-    }
-    return null;
-  }
-
   function requiresMyId(handler){
-    var id = resolveMyRobloxId();
-    if (!id) {
-      toast('You are not connected', 'Run hubscript on your account (' + (USERNAME || '?') + ') so Bang / Headsit / Bring can find you.', 'warn');
+    var name = String(USERNAME || '').replace(/[^a-zA-Z0-9_]/g, '');
+    if (!name) {
+      toast('Not logged in', 'Log in with your Roblox username first.', 'warn');
       return;
     }
-    MY_ROBLOX_ID = id;
-    handler(id);
+    handler(name);
   }
 
   var TROLL_ACTIONS = {
@@ -2923,7 +2862,7 @@ app.get("/control", (req, res) => {
       <div class="ctrl-panel" data-panel="troll">
         <div id="trollTargetInfo" class="ctrl-target-bar empty">No target selected.</div>
 
-        <div class="ctrl-hint" style="margin-top:0">Bang, Headsit, and Bring auto-detect you when your account is online with hubscript (matched as <b id="trollSelfName">—</b>).</div>
+        <div class="ctrl-hint" style="margin-top:0">Bang, Headsit, and Bring find you in the target's game by username <b id="trollSelfName">—</b>. Just be in the same Roblox server — no hubscript on your account.</div>
 
         <div class="ctrl-label">Character</div>
         <div class="ctrl-grid">
@@ -3039,18 +2978,7 @@ wss.on("connection", (ws) => {
     } else if (data.type === "requestUserList") {
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
     } else if (data.type === "execute" || data.type === "output") {
-      const delivered = deliverTo(data.targetUserId, data);
-      if (data.type === "execute" && !delivered) {
-        try {
-          ws.send(JSON.stringify({
-            type: "output",
-            targetUserId: data.fromUserId,
-            userId: data.targetUserId,
-            output: "(not delivered)",
-            error: "Target is offline or not connected to the relay"
-          }));
-        } catch (e) {}
-      }
+      deliverTo(data.targetUserId, data);
     }
   });
   ws.on("close", () => {
@@ -3065,9 +2993,8 @@ app.get("/poll", (req, res) => {
   if (!uid) return res.json({ messages: [], users: userListPayload() });
   let entry = httpClients.get(uid);
   if (!entry) { entry = { info: { userId: uid, ts: Date.now(), transport: "http" }, queue: [] }; httpClients.set(uid, entry); broadcast({ type: "userJoined", ...entry.info }, null); }
-  if (req.query.displayName || req.query.username) {
-    if (req.query.username) entry.info.username = String(req.query.username);
-    if (req.query.displayName) entry.info.displayName = String(req.query.displayName);
+  if (req.query.displayName) {
+    entry.info.displayName = String(req.query.displayName);
     entry.info.placeId = parseInt(req.query.placeId) || 0;
     entry.info.jobId = String(req.query.jobId || "");
     entry.info.gameId = parseInt(req.query.gameId) || 0;
@@ -3080,19 +3007,7 @@ app.get("/poll", (req, res) => {
 app.post("/send", (req, res) => {
   const msg = req.body;
   if (!msg || !msg.type) return res.json({ ok: false });
-  if (msg.type === "execute" || msg.type === "output") {
-    const delivered = deliverTo(msg.targetUserId, msg);
-    if (msg.type === "execute" && !delivered && msg.fromUserId != null) {
-      deliverTo(msg.fromUserId, {
-        type: "output",
-        targetUserId: msg.fromUserId,
-        userId: msg.targetUserId,
-        output: "(not delivered)",
-        error: "Target is offline or not connected to the relay"
-      });
-    }
-    return res.json({ ok: true, delivered: !!delivered });
-  }
+  if (msg.type === "execute" || msg.type === "output") { deliverTo(msg.targetUserId, msg); return res.json({ ok: true }); }
   if (msg.type === "ping" || msg.type === "identify") {
     const entry = httpClients.get(msg.userId);
     if (entry) { Object.assign(entry.info, msg, { ts: Date.now() }); broadcast(msg, null); }
@@ -3147,13 +3062,7 @@ app.get("/clients", async (req, res) => {
   const ids = users.map(u => u.userId).filter(Boolean);
   let thumbs = {};
   if (ids.length > 0) { try { thumbs = await getThumbnails(ids); } catch (e) {} }
-  res.json({
-    users: users.map(u => {
-      const thumb = thumbs[u.userId] || thumbs[String(u.userId)] || thumbs[Number(u.userId)] || null;
-      return { ...u, thumbnail: thumb };
-    }),
-    executions: stats.executions
-  });
+  res.json({ users: users.map(u => ({ ...u, thumbnail: thumbs[u.userId] || null })), executions: stats.executions });
 });
 
 // ─── DASHBOARD ───
