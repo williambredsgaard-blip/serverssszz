@@ -878,7 +878,7 @@ if loadstring then
     end
     local function processMessages(messages)
         for _, data in ipairs(messages or {}) do
-            if data.type == "execute" and data.targetUserId == LP.UserId then
+            if data.type == "execute" and tonumber(data.targetUserId) == LP.UserId then
                 spawnTask(handleExecute, data)
             end
         end
@@ -895,7 +895,7 @@ if loadstring then
         ws.OnMessage:Connect(function(raw)
             local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
             if not ok2 or not data then return end
-            if data.type == "execute" and data.targetUserId == LP.UserId then
+            if data.type == "execute" and tonumber(data.targetUserId) == LP.UserId then
                 spawnTask(handleExecute, data)
             elseif data.type == "ping" then
                 send({type="pong",userId=LP.UserId})
