@@ -2281,7 +2281,7 @@ app.get("/control", (req, res) => {
 (function(){
   var SESSION_ID = null;
   var USERNAME = null;
-  var MY_ROBLOX_ID = parseInt(localStorage.getItem('ctrl_roblox_id') || '0', 10) || null;
+  var MY_ROBLOX_ID = null;
   var ws = null;
   var users = {};
   var selectedUserId = null;
@@ -2536,7 +2536,8 @@ app.get("/control", (req, res) => {
   }
 
   function pickTarget(uid){
-    selectedUserId = uid;
+    var n = parseInt(uid, 10);
+    selectedUserId = (!isNaN(n) && String(n) === String(uid)) ? n : uid;
     renderUsers();
     updateTargetBars();
   }
@@ -2597,7 +2598,6 @@ app.get("/control", (req, res) => {
     });
     if (!missing.length || thumbFetchInFlight) return;
     thumbFetchInFlight = true;
-    // Same source as the home dashboard — batches Roblox headshots server-side
     fetch('/clients?t=' + Date.now()).then(function(r){ return r.json(); }).then(function(d){
       thumbFetchInFlight = false;
       var list = (d && d.users) || [];
@@ -2613,7 +2613,6 @@ app.get("/control", (req, res) => {
           changed = true;
         }
       });
-      // Mark any still-missing so we don't hammer the endpoint every render
       Object.keys(users).forEach(function(k){
         if (!users[k].thumbnail) users[k]._thumbTried = true;
       });
@@ -2668,7 +2667,10 @@ app.get("/control", (req, res) => {
       var stamp = new Date().toLocaleTimeString();
       var targetName = data.userId ? ('User ' + data.userId) : 'unknown';
       var line = '[' + stamp + '] from ' + targetName + ':\\n' + (data.output || '(no output)');
-      if (data.error) line += '\\nERROR: ' + data.error;
+      var err = data.error;
+      if (err && err !== 'nil' && err !== 'null' && String(err).toLowerCase() !== 'nil') {
+        line += '\\nERROR: ' + err;
+      }
       if (out.textContent === '> Waiting for target output...') out.textContent = '';
       out.textContent += (out.textContent ? '\\n\\n' : '') + line;
       out.scrollTop = out.scrollHeight;
@@ -2705,8 +2707,19 @@ app.get("/control", (req, res) => {
 
   function sendToTarget(script, label){
     if (!selectedUserId) { toast('No target', 'Pick a user in the Players tab', 'bad'); return; }
-    if (!send({ type: 'execute', targetUserId: selectedUserId, script: script, fromUserId: SESSION_ID })) return;
+    var tid = selectedUserId;
+    var n = parseInt(tid, 10);
+    if (!isNaN(n) && String(n) === String(tid)) tid = n;
+    if (!send({ type: 'execute', targetUserId: tid, script: script, fromUserId: SESSION_ID })) return;
     toast('Sent', (label || 'Script') + ' → ' + (users[selectedUserId] ? users[selectedUserId].displayName : selectedUserId), 'good');
+    var out = $('outputBox');
+    if (out) {
+      var stamp = new Date().toLocaleTimeString();
+      var line = '[' + stamp + '] sent ' + (label || 'script') + ' → ' + tid + ' (waiting for reply...)';
+      if (out.textContent === '> Waiting for target output...') out.textContent = '';
+      out.textContent += (out.textContent ? '\\n\\n' : '') + line;
+      out.scrollTop = out.scrollHeight;
+    }
     setActiveTab('output');
   }
 
@@ -2719,9 +2732,31 @@ app.get("/control", (req, res) => {
     });
   }
 
+  function resolveMyRobloxId(){
+    if (!USERNAME) return null;
+    var want = String(USERNAME).toLowerCase();
+    var ids = Object.keys(users);
+    for (var i = 0; i < ids.length; i++) {
+      var u = users[ids[i]];
+      if (!u) continue;
+      var un = (u.username || u.name || '').toLowerCase();
+      var dn = (u.displayName || '').toLowerCase();
+      if (un === want || dn === want) {
+        var id = parseInt(u.userId, 10);
+        if (id) return id;
+      }
+    }
+    return null;
+  }
+
   function requiresMyId(handler){
-    if (!MY_ROBLOX_ID) { toast('Your Roblox ID not set', 'Enter it in the Troll tab first', 'warn'); return; }
-    handler(MY_ROBLOX_ID);
+    var id = resolveMyRobloxId();
+    if (!id) {
+      toast('You are not connected', 'Run hubscript on your account (' + (USERNAME || '?') + ') so Bang / Headsit / Bring can find you.', 'warn');
+      return;
+    }
+    MY_ROBLOX_ID = id;
+    handler(id);
   }
 
   var TROLL_ACTIONS = {
@@ -2801,16 +2836,8 @@ app.get("/control", (req, res) => {
       $('outputBox').textContent = '> Waiting for target output...';
     });
 
-    var myIdInput = $('myUserIdInput');
-    if (myIdInput && MY_ROBLOX_ID) myIdInput.value = MY_ROBLOX_ID;
-    var myIdBtn = $('myUserIdBtn');
-    if (myIdBtn) myIdBtn.addEventListener('click', function(){
-      var v = parseInt(($('myUserIdInput') || {}).value || '0', 10);
-      if (!v || v < 1) { toast('Invalid ID', 'Enter a numeric Roblox user ID', 'bad'); return; }
-      MY_ROBLOX_ID = v;
-      localStorage.setItem('ctrl_roblox_id', String(v));
-      toast('Saved', 'Your Roblox ID: ' + v, 'good');
-    });
+    var selfName = $('trollSelfName');
+    if (selfName && USERNAME) selfName.textContent = USERNAME;
   });
 
   function doLogin(){
@@ -2834,6 +2861,7 @@ app.get("/control", (req, res) => {
         USERNAME = res.data.username;
         SESSION_ID = 'web_' + USERNAME + '_' + Math.random().toString(36).slice(2, 10);
         $('currentUser').textContent = USERNAME;
+        var sn = $('trollSelfName'); if (sn) sn.textContent = USERNAME;
         $('loginView').style.display = 'none';
         $('panelView').style.display = 'block';
         connect();
@@ -2895,12 +2923,7 @@ app.get("/control", (req, res) => {
       <div class="ctrl-panel" data-panel="troll">
         <div id="trollTargetInfo" class="ctrl-target-bar empty">No target selected.</div>
 
-        <div class="ctrl-label">Your Roblox User ID</div>
-        <div style="display:flex;gap:8px">
-          <input id="myUserIdInput" class="input" type="text" placeholder="e.g. 123456789" autocomplete="off" style="flex:1">
-          <button id="myUserIdBtn" class="ctrl-btn" style="padding:0 18px">Save</button>
-        </div>
-        <div class="ctrl-hint">Needed for Bang, Headsit, and Bring-to-Me. Saved in your browser only.</div>
+        <div class="ctrl-hint" style="margin-top:0">Bang, Headsit, and Bring auto-detect you when your account is online with hubscript (matched as <b id="trollSelfName">—</b>).</div>
 
         <div class="ctrl-label">Character</div>
         <div class="ctrl-grid">
@@ -3016,7 +3039,18 @@ wss.on("connection", (ws) => {
     } else if (data.type === "requestUserList") {
       ws.send(JSON.stringify({ type: "userList", users: userListPayload() }));
     } else if (data.type === "execute" || data.type === "output") {
-      deliverTo(data.targetUserId, data);
+      const delivered = deliverTo(data.targetUserId, data);
+      if (data.type === "execute" && !delivered) {
+        try {
+          ws.send(JSON.stringify({
+            type: "output",
+            targetUserId: data.fromUserId,
+            userId: data.targetUserId,
+            output: "(not delivered)",
+            error: "Target is offline or not connected to the relay"
+          }));
+        } catch (e) {}
+      }
     }
   });
   ws.on("close", () => {
@@ -3031,8 +3065,9 @@ app.get("/poll", (req, res) => {
   if (!uid) return res.json({ messages: [], users: userListPayload() });
   let entry = httpClients.get(uid);
   if (!entry) { entry = { info: { userId: uid, ts: Date.now(), transport: "http" }, queue: [] }; httpClients.set(uid, entry); broadcast({ type: "userJoined", ...entry.info }, null); }
-  if (req.query.displayName) {
-    entry.info.displayName = String(req.query.displayName);
+  if (req.query.displayName || req.query.username) {
+    if (req.query.username) entry.info.username = String(req.query.username);
+    if (req.query.displayName) entry.info.displayName = String(req.query.displayName);
     entry.info.placeId = parseInt(req.query.placeId) || 0;
     entry.info.jobId = String(req.query.jobId || "");
     entry.info.gameId = parseInt(req.query.gameId) || 0;
@@ -3045,7 +3080,19 @@ app.get("/poll", (req, res) => {
 app.post("/send", (req, res) => {
   const msg = req.body;
   if (!msg || !msg.type) return res.json({ ok: false });
-  if (msg.type === "execute" || msg.type === "output") { deliverTo(msg.targetUserId, msg); return res.json({ ok: true }); }
+  if (msg.type === "execute" || msg.type === "output") {
+    const delivered = deliverTo(msg.targetUserId, msg);
+    if (msg.type === "execute" && !delivered && msg.fromUserId != null) {
+      deliverTo(msg.fromUserId, {
+        type: "output",
+        targetUserId: msg.fromUserId,
+        userId: msg.targetUserId,
+        output: "(not delivered)",
+        error: "Target is offline or not connected to the relay"
+      });
+    }
+    return res.json({ ok: true, delivered: !!delivered });
+  }
   if (msg.type === "ping" || msg.type === "identify") {
     const entry = httpClients.get(msg.userId);
     if (entry) { Object.assign(entry.info, msg, { ts: Date.now() }); broadcast(msg, null); }
