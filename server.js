@@ -3135,7 +3135,9 @@ function fmtBytes(n) {
   return (n/(1024*1024*1024)).toFixed(2) + " GB";
 }
 function uploadUrlFor(u) { return "/f/" + u.id + "/" + encodeURIComponent(u.originalName); }
+function shareUrlFor(u) { return "/v/" + u.id + "/" + encodeURIComponent(u.originalName); }
 
+// ── Raw file server with HTTP Range support (used by the <video> player) ──
 function serveUpload(req, res) {
   const meta = uploads[req.params.id];
   if (!meta) return res.status(404).set("Content-Type", "text/plain").send("File not found");
@@ -3179,6 +3181,136 @@ function serveUpload(req, res) {
 
 app.get("/f/:id", serveUpload);
 app.get("/f/:id/:filename", serveUpload);
+
+// ── Share page with Open Graph / Twitter player meta tags for Discord embeds ──
+app.get("/v/:id/:filename", (req, res) => {
+  const meta = uploads[req.params.id];
+  if (!meta) {
+    return res.status(404).set("Content-Type", "text/html").send(
+      pageShell("File not found - Roblox Script Hub", `
+        ${topNav('upload')}
+        <div style="text-align:center;padding:60px 20px">
+          <div class="h1">File not found</div>
+          <p class="sub" style="margin:8px auto 20px">This upload doesn't exist or has been removed.</p>
+          <a href="/upload" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#7850ff,#2f8fff);color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Back to Upload</a>
+        </div>
+      `)
+    );
+  }
+
+  const rawUrl = "/f/" + meta.id + "/" + encodeURIComponent(meta.originalName);
+  const origin = (req.headers["x-forwarded-proto"] || req.protocol || "https") + "://" + (req.headers["x-forwarded-host"] || req.headers.host);
+  const absoluteRaw = origin + rawUrl;
+  const safeName = sanitizeText(meta.originalName);
+  const ct = meta.contentType || "";
+
+  const isVideo = ct.indexOf("video/") === 0;
+  const isImage = ct.indexOf("image/") === 0;
+  const isAudio = ct.indexOf("audio/") === 0;
+
+  const videoMeta = isVideo ? `
+    <meta property="og:video" content="${absoluteRaw}">
+    <meta property="og:video:url" content="${absoluteRaw}">
+    <meta property="og:video:secure_url" content="${absoluteRaw}">
+    <meta property="og:video:type" content="${sanitizeText(ct)}">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:player" content="${absoluteRaw}">
+    <meta name="twitter:player:stream" content="${absoluteRaw}">
+    <meta name="twitter:player:stream:content_type" content="${sanitizeText(ct)}">
+  ` : "";
+
+  const imageMeta = isImage ? `
+    <meta property="og:image" content="${absoluteRaw}">
+    <meta property="og:image:secure_url" content="${absoluteRaw}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="${absoluteRaw}">
+  ` : "";
+
+  const audioMeta = isAudio ? `
+    <meta property="og:audio" content="${absoluteRaw}">
+    <meta property="og:audio:secure_url" content="${absoluteRaw}">
+    <meta property="og:audio:type" content="${sanitizeText(ct)}">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:player" content="${absoluteRaw}">
+    <meta name="twitter:player:stream" content="${absoluteRaw}">
+    <meta name="twitter:player:stream:content_type" content="${sanitizeText(ct)}">
+  ` : "";
+
+  const previewHtml = isVideo
+    ? `<video src="${rawUrl}" controls playsinline preload="metadata" style="max-width:100%;max-height:70vh;border-radius:12px;background:#000"></video>`
+    : isImage
+      ? `<img src="${rawUrl}" alt="${safeName}" style="max-width:100%;max-height:70vh;border-radius:12px">`
+      : isAudio
+        ? `<audio src="${rawUrl}" controls style="width:100%;max-width:520px"></audio>`
+        : `<div class="card" style="max-width:420px;text-align:center;margin:0 auto"><div style="color:#6a6a7a;display:flex;justify-content:center;margin-bottom:12px">${ICONS.document(40)}</div><div style="color:#8a8a9a;font-size:13px">This file type can't be previewed inline.</div></div>`;
+
+  const sharePageUrl = origin + "/v/" + meta.id + "/" + encodeURIComponent(meta.originalName);
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${safeName} - Roblox Script Hub</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta property="og:site_name" content="Roblox Script Hub">
+<meta property="og:title" content="${safeName}">
+<meta property="og:description" content="Shared via Roblox Script Hub">
+<meta property="og:type" content="${isVideo ? "video.other" : isAudio ? "music.song" : "website"}">
+<meta property="og:url" content="${sharePageUrl}">
+${videoMeta}
+${imageMeta}
+${audioMeta}
+<meta name="theme-color" content="#0b0b10">
+<style>
+  *{box-sizing:border-box}
+  body{background:#0b0b10;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:24px;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  a{color:#b9a3ff}
+  .wrap{max-width:900px;width:100%;text-align:center}
+  .back{display:inline-flex;align-items:center;gap:6px;color:#8a8a9a;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:18px}
+  .back:hover{color:#fff}
+  .name{font-size:18px;font-weight:700;color:#fff;margin:16px 0 6px;word-break:break-all}
+  .meta{color:#8a8a9a;font-size:12px;margin-bottom:18px}
+  .actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+  .btn{padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(120,90,255,0.5);background:rgba(120,90,255,0.18);color:#c5b3ff;text-decoration:none;transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;gap:8px}
+  .btn:hover{background:rgba(120,90,255,0.32);color:#fff;transform:translateY(-1px)}
+  .card{background:rgba(28,28,34,0.7);border:1px solid rgba(90,90,105,0.55);border-radius:14px;padding:22px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/upload" class="back">← Back to Upload</a>
+  <div>${previewHtml}</div>
+  <div class="name">${safeName}</div>
+  <div class="meta">${fmtBytes(meta.size)} · ${sanitizeText(ct || "unknown")}</div>
+  <div class="actions">
+    <a class="btn" href="${rawUrl}" download>Download</a>
+    <a class="btn" href="${rawUrl}" target="_blank" rel="noopener noreferrer">Open raw</a>
+    <button class="btn" id="copyShare" type="button">Copy share link</button>
+  </div>
+</div>
+<script>
+  document.getElementById('copyShare').addEventListener('click', function(){
+    var u = ${JSON.stringify(sharePageUrl)};
+    var b = this;
+    function done(){ var o = b.textContent; b.textContent = 'Copied!'; setTimeout(function(){ b.textContent = o; }, 1400); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(u).then(done).catch(function(){ done(); });
+    } else {
+      var ta = document.createElement('textarea'); ta.value = u; document.body.appendChild(ta);
+      ta.select(); try { document.execCommand('copy'); } catch(e){}
+      document.body.removeChild(ta); done();
+    }
+  });
+</script>
+</body>
+</html>`;
+
+  res.set("Content-Type", "text/html; charset=utf-8");
+  res.set("Cache-Control", "public, max-age=300");
+  res.send(html);
+});
 
 app.post("/api/upload", (req, res) => {
   let filename = "file";
@@ -3229,7 +3361,15 @@ app.post("/api/upload", (req, res) => {
       };
       saveUploads();
       console.log(`[upload] ${id} ${filename} (${fmtBytes(size)}) ${contentType}`);
-      res.json({ ok: true, id, url: uploadUrlFor(uploads[id]), size, name: filename, contentType });
+      res.json({
+        ok: true,
+        id,
+        url: uploadUrlFor(uploads[id]),
+        shareUrl: shareUrlFor(uploads[id]),
+        size,
+        name: filename,
+        contentType
+      });
     });
   });
 
@@ -3255,7 +3395,9 @@ app.get("/api/uploads", (req, res) => {
     .slice(0, 60)
     .map(u => ({
       id: u.id, name: u.originalName, size: u.size, contentType: u.contentType,
-      uploadedAt: u.uploadedAt, url: uploadUrlFor(u)
+      uploadedAt: u.uploadedAt,
+      url: uploadUrlFor(u),
+      shareUrl: shareUrlFor(u)
     }));
   res.json({ ok: true, uploads: list });
 });
@@ -3352,28 +3494,30 @@ app.get("/upload", (req, res) => {
       resultCard.style.display = 'block';
       resultCard.classList.remove('error');
       resultTitle.textContent = 'Upload complete';
-      var url = fullUrl(data.url);
+      // Use the share URL so the link embeds on Discord / social platforms
+      var shareUrl = data.shareUrl ? fullUrl(data.shareUrl) : fullUrl(data.url);
+      var rawUrl = data.url;
       var ct = data.contentType || '';
       var preview = '';
       if (ct.indexOf('image/') === 0) {
-        preview = '<div class="result-preview"><img src="' + escapeHtml(data.url) + '" alt=""></div>';
+        preview = '<div class="result-preview"><img src="' + escapeHtml(rawUrl) + '" alt=""></div>';
       } else if (ct.indexOf('video/') === 0) {
-        preview = '<div class="result-preview"><video src="' + escapeHtml(data.url) + '" controls playsinline preload="metadata"></video></div>';
+        preview = '<div class="result-preview"><video src="' + escapeHtml(rawUrl) + '" controls playsinline preload="metadata"></video></div>';
       } else if (ct.indexOf('audio/') === 0) {
-        preview = '<div class="result-preview" style="padding:16px"><audio src="' + escapeHtml(data.url) + '" controls style="width:100%"></audio></div>';
+        preview = '<div class="result-preview" style="padding:16px"><audio src="' + escapeHtml(rawUrl) + '" controls style="width:100%"></audio></div>';
       }
       resultBody.innerHTML =
-        '<div class="result-link" id="resLink">' + escapeHtml(url) + '</div>' +
+        '<div class="result-link" id="resLink">' + escapeHtml(shareUrl) + '</div>' +
         '<div class="result-actions">' +
           '<button class="result-btn" id="copyLinkBtn">Copy link</button>' +
-          '<a class="result-btn" href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener noreferrer">Open</a>' +
-          '<a class="result-btn" href="' + escapeHtml(data.url) + '" download>Download</a>' +
+          '<a class="result-btn" href="' + escapeHtml(shareUrl) + '" target="_blank" rel="noopener noreferrer">Open</a>' +
+          '<a class="result-btn" href="' + escapeHtml(rawUrl) + '" download>Download</a>' +
         '</div>' +
         preview +
         '<div class="result-meta">' + escapeHtml(data.name) + ' · ' + fmtBytes(data.size) + ' · ' + escapeHtml(ct || 'unknown') + '<br>Paste this link on Discord, Twitter, or anywhere else to embed it.</div>';
       var btn = document.getElementById('copyLinkBtn');
       if (btn) btn.addEventListener('click', function(){
-        copyText(url, function(){
+        copyText(shareUrl, function(){
           var orig = btn.textContent;
           btn.textContent = 'Copied!';
           setTimeout(function(){ btn.textContent = orig; }, 1400);
@@ -3456,7 +3600,7 @@ app.get("/upload", (req, res) => {
         return;
       }
       recentList.innerHTML = list.map(function(u){
-        var url = fullUrl(u.url);
+        var url = u.shareUrl ? fullUrl(u.shareUrl) : fullUrl(u.url);
         return '<div class="recent-item">' +
           '<div class="recent-icon">' + iconFor(u.contentType) + '</div>' +
           '<div class="recent-meta">' +
