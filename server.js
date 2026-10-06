@@ -436,6 +436,14 @@ if (!fs.existsSync(WATCH_DIR)) {
 const watchStreams = new Map();
 const WATCH_STALE_MS = 15_000;
 
+// ─── TEXTURE CACHE DIR ───
+const TEX_DIR = path.join(__dirname, "tex_cache");
+if (!fs.existsSync(TEX_DIR)) {
+  try { fs.mkdirSync(TEX_DIR, { recursive: true }); } catch (e) { console.error("[tex] mkdir failed:", e.message); }
+}
+const texMetaCache = new Map(); // assetId -> { url, at }
+const TEX_TTL = 24 * 60 * 60 * 1000;
+
 // ─── HELPERS ───
 function fetchText(url) {
   return new Promise((resolve, reject) => {
@@ -446,6 +454,28 @@ function fetchText(url) {
     });
     req.on("error", reject);
     req.setTimeout(8000, () => req.destroy(new Error("timeout")));
+  });
+}
+
+// Fetch a binary buffer (used by the texture proxy)
+function fetchBuffer(url, depth = 0) {
+  return new Promise((resolve, reject) => {
+    if (depth > 5) return reject(new Error("too many redirects"));
+    const req = https.get(url, { headers: { "User-Agent": "Mozilla/5.0 ScriptHub/1.0" } }, (resp) => {
+      if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+        resp.resume();
+        return fetchBuffer(resp.headers.location, depth + 1).then(resolve, reject);
+      }
+      if (resp.statusCode !== 200) {
+        resp.resume();
+        return reject(new Error("HTTP " + resp.statusCode));
+      }
+      const chunks = [];
+      resp.on("data", (c) => chunks.push(c));
+      resp.on("end", () => resolve({ buf: Buffer.concat(chunks), contentType: resp.headers["content-type"] || "image/png" }));
+    });
+    req.on("error", reject);
+    req.setTimeout(10000, () => req.destroy(new Error("timeout")));
   });
 }
 
@@ -3099,6 +3129,53 @@ app.get("/thumbnail", async (req, res) => {
   res.json({ ok: !!map[uid], url: map[uid] || null });
 });
 
+// ─── TEXTURE PROXY (Roblox asset thumbnails, disk-cached) ───
+app.get("/api/tex/:assetId", async (req, res) => {
+  const id = String(req.params.assetId).replace(/[^0-9]/g, "");
+  if (!id) return res.status(400).set("Content-Type", "text/plain").send("bad asset id");
+
+  const cachedFile = path.join(TEX_DIR, id + ".png");
+  if (fs.existsSync(cachedFile)) {
+    res.set("Content-Type", "image/png");
+    res.set("Cache-Control", "public, max-age=86400, immutable");
+    res.set("Access-Control-Allow-Origin", "*");
+    return fs.createReadStream(cachedFile).on("error", () => res.end()).pipe(res);
+  }
+
+  try {
+    // Resolve the current thumbnail URL for this asset
+    let imgUrl = null;
+    const now = Date.now();
+    const meta = texMetaCache.get(id);
+    if (meta && now - meta.at < TEX_TTL && meta.url) {
+      imgUrl = meta.url;
+    } else {
+      const info = await fetchJson("https://thumbnails.roblox.com/v1/assets?assetIds=" + id + "&size=420x420&format=Png&isCircular=false");
+      if (info && Array.isArray(info.data) && info.data[0]) {
+        const entry = info.data[0];
+        if (entry.state === "Completed" && entry.imageUrl) {
+          imgUrl = entry.imageUrl;
+          texMetaCache.set(id, { url: imgUrl, at: now });
+        }
+      }
+    }
+    if (!imgUrl) return res.status(404).set("Content-Type", "text/plain").send("no thumbnail");
+
+    const { buf, contentType } = await fetchBuffer(imgUrl);
+    // Only cache real images; Roblox sometimes returns a tiny placeholder
+    if (buf && buf.length > 0) {
+      try { fs.writeFileSync(cachedFile, buf); } catch (e) {}
+    }
+    res.set("Content-Type", contentType || "image/png");
+    res.set("Cache-Control", "public, max-age=86400, immutable");
+    res.set("Access-Control-Allow-Origin", "*");
+    res.send(buf);
+  } catch (e) {
+    console.warn("[tex] fetch failed for asset", id, e.message);
+    res.status(502).set("Content-Type", "text/plain").send("texture fetch failed");
+  }
+});
+
 setInterval(() => {
   const now = Date.now();
   for (const [uid, entry] of httpClients) if (now - entry.info.ts > STALE_MS) { httpClients.delete(uid); broadcast({ type: "userLeft", userId: uid }, null); }
@@ -4086,7 +4163,7 @@ app.get("/watch/:userId", (req, res) => {
     <div class="scard">
       <div class="lbl">Status</div>
       <div id="staleMsg" style="color:#ff9a9a;font-size:12px;text-align:center;padding:6px 0;display:none"></div>
-      <div style="color:#8a8a9a;font-size:11.5px;line-height:1.55">Streamed at ~20 Hz from the target's client. The scene is exported once per place and cached on the server.</div>
+      <div style="color:#8a8a9a;font-size:11.5px;line-height:1.55">Streamed at ~60 Hz from the target's client. The scene is exported once per place and cached on the server.</div>
     </div>
   </div>
 </div>
@@ -4102,6 +4179,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(vp.clientWidth, vp.clientHeight);
 renderer.setClearColor(0x0a0a12, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 vp.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -4152,29 +4230,101 @@ const GEO_WEDGE = (() => {
   g.computeVertexNormals();
   return g;
 })();
+const GEO_HEAD = (() => {
+  // Head: slightly narrower box with a front face that can take a face decal
+  const g = new THREE.BoxGeometry(1, 1, 1);
+  return g;
+})();
+const GEO_MESH = (() => {
+  // "MeshPart" / accessory approximation: rounded-ish shape using a low-poly sphere
+  return new THREE.SphereGeometry(0.5, 12, 8);
+})();
 
 const MAT_OPAQUE = new THREE.MeshLambertMaterial({ color: 0xffffff });
 const MAT_TRANSPARENT = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
 
-const playerMeshes = {};
-let currentData = null;
-let camMode = 'orbit';
-let sceneLoaded = false;
-let lastPlaceId = null;
-let lastFpsTime = performance.now();
-let frameCount = 0;
+// ── Texture loading ──
+const texLoader = new THREE.TextureLoader();
+texLoader.setCrossOrigin('anonymous');
+const texPromiseCache = new Map(); // assetId -> Promise<THREE.Texture|null>
+const texReadyCache = new Map();   // assetId -> THREE.Texture | null (once loaded)
+
+function getTexture(assetId) {
+  if (assetId == null || assetId === 0 || assetId === "") return null;
+  const key = String(assetId);
+  if (texReadyCache.has(key)) return texReadyCache.get(key);
+  if (texPromiseCache.has(key)) return null; // still loading; caller will be notified when resolved
+  const p = new Promise((resolve) => {
+    texLoader.load(
+      '/api/tex/' + key,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.anisotropy = 4;
+        tex.generateMipmaps = true;
+        tex.needsUpdate = true;
+        texReadyCache.set(key, tex);
+        texPromiseCache.delete(key);
+        // Notify any listeners that this texture finished loading
+        for (const cb of texListeners) cb(key, tex);
+        resolve(tex);
+      },
+      undefined,
+      () => {
+        texReadyCache.set(key, null);
+        texPromiseCache.delete(key);
+        resolve(null);
+      }
+    );
+  });
+  texPromiseCache.set(key, p);
+  return null;
+}
+
+// Texture load listeners let us re-bind materials after async load
+const texListeners = new Set();
+
+function bindTextureWhenReady(assetId, cb) {
+  const key = String(assetId);
+  const ready = texReadyCache.get(key);
+  if (ready !== undefined) { cb(ready); return; }
+  const handler = (k, t) => { if (k === key) { texListeners.delete(handler); cb(t); } };
+  texListeners.add(handler);
+  getTexture(key);
+}
+
+// ── Part vertex builder ──
+function partToMatrix(p) {
+  const m = new THREE.Matrix4();
+  m.set(
+    p[3], p[4], p[5], 0,
+    p[6], p[7], p[8], 0,
+    p[9], p[10], p[11], 0,
+    0, 0, 0, 1
+  );
+  return m;
+}
+
+// ── Static scene (fast path: instancing for untextured, individual meshes for textured) ──
+let currentSceneSignature = null;
 
 function buildStaticScene(parts) {
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   if (!parts || parts.length === 0) { sceneLoaded = true; return; }
 
-  const byShape = { 0: [], 1: [], 2: [], 3: [] };
+  const byShape = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
   const transpList = [];
+  const textured = [];
+
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
-    const tr = p[19];
+    if (!Array.isArray(p)) continue;
+    const tr = p[19] || 0;
     const sh = p[20] | 0;
+    const tid = p[21];
     if (tr >= 0.98) continue;
+    if (tid) { textured.push(p); continue; }
     if (tr > 0.5) { transpList.push(p); continue; }
     if (!byShape[sh]) byShape[sh] = [];
     byShape[sh].push(p);
@@ -4215,24 +4365,41 @@ function buildStaticScene(parts) {
   makeInst(byShape[1] || [], GEO_BALL);
   makeInst(byShape[2] || [], GEO_CYL);
   makeInst(byShape[3] || [], GEO_WEDGE);
+  makeInst(byShape[4] || [], GEO_HEAD);
+  makeInst(byShape[5] || [], GEO_MESH);
 
+  // Transparent untextured parts
   for (const p of transpList) {
     const sh = p[20] | 0;
-    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : GEO_BOX;
+    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : sh === 4 ? GEO_HEAD : sh === 5 ? GEO_MESH : GEO_BOX;
     const mat = MAT_TRANSPARENT.clone();
     mat.color.setRGB(p[15], p[16], p[17]);
     mat.opacity = Math.max(0.08, 1 - p[19]);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(p[0], p[1], p[2]);
-    const rotM = new THREE.Matrix4().set(
-      p[3], p[4], p[5], 0,
-      p[6], p[7], p[8], 0,
-      p[9], p[10], p[11], 0,
-      0, 0, 0, 1
-    );
-    mesh.quaternion.setFromRotationMatrix(rotM);
+    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
     mesh.scale.set(p[12], p[13], p[14]);
     worldGroup.add(mesh);
+  }
+
+  // Textured parts (individual meshes with async texture binding)
+  for (const p of textured) {
+    const sh = p[20] | 0;
+    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : sh === 4 ? GEO_HEAD : sh === 5 ? GEO_MESH : GEO_BOX;
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const tintR = p[15], tintG = p[16], tintB = p[17];
+    // If the part has no explicit texture tint, use white; else tint the texture with the color
+    mat.color.setRGB(tintR, tintG, tintB);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p[0], p[1], p[2]);
+    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
+    mesh.scale.set(p[12], p[13], p[14]);
+    if (p[19]) { mat.transparent = true; mat.opacity = Math.max(0.08, 1 - p[19]); }
+    worldGroup.add(mesh);
+    const tid = p[21];
+    bindTextureWhenReady(tid, (tex) => {
+      if (tex) { mat.map = tex; mat.needsUpdate = true; }
+    });
   }
 
   sceneLoaded = true;
@@ -4241,11 +4408,17 @@ function buildStaticScene(parts) {
 function rebuildDynamic(parts) {
   while (dynamicGroup.children.length) dynamicGroup.remove(dynamicGroup.children[0]);
   if (!parts || parts.length === 0) return;
-  const byShape = { 0: [], 1: [], 2: [], 3: [] };
+
+  const byShape = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
+  const textured = [];
   for (let i = 0; i < parts.length; i++) {
-    const sh = parts[i][20] | 0;
+    const p = parts[i];
+    if (!Array.isArray(p)) continue;
+    const sh = p[20] | 0;
+    const tid = p[21];
+    if (tid) { textured.push(p); continue; }
     if (!byShape[sh]) byShape[sh] = [];
-    byShape[sh].push(parts[i]);
+    byShape[sh].push(p);
   }
   function makeInst(list, geo) {
     if (list.length === 0) return;
@@ -4275,30 +4448,50 @@ function rebuildDynamic(parts) {
   makeInst(byShape[1] || [], GEO_BALL);
   makeInst(byShape[2] || [], GEO_CYL);
   makeInst(byShape[3] || [], GEO_WEDGE);
+  makeInst(byShape[4] || [], GEO_HEAD);
+  makeInst(byShape[5] || [], GEO_MESH);
+
+  for (const p of textured) {
+    const sh = p[20] | 0;
+    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : sh === 4 ? GEO_HEAD : sh === 5 ? GEO_MESH : GEO_BOX;
+    const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(p[15], p[16], p[17]) });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p[0], p[1], p[2]);
+    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
+    mesh.scale.set(p[12], p[13], p[14]);
+    if (p[19]) { mat.transparent = true; mat.opacity = Math.max(0.08, 1 - p[19]); }
+    dynamicGroup.add(mesh);
+    const tid = p[21];
+    bindTextureWhenReady(tid, (tex) => {
+      if (tex) { mat.map = tex; mat.needsUpdate = true; }
+    });
+  }
 }
 
-// Blocky R6 humanoid
-function makePlayerMesh(colorHex) {
+// Blocky humanoid for remote players (the target's own body is already in the scene,
+// so we never build a synthetic mesh for the local player — that was the "duplicate").
+function makePlayerMesh(colorHex, userId) {
   const g = new THREE.Group();
-  const torsoMat = new THREE.MeshLambertMaterial({ color: colorHex });
+  const bodyMat = new THREE.MeshLambertMaterial({ color: colorHex });
   const skinMat = new THREE.MeshLambertMaterial({ color: 0xf3c790 });
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), torsoMat);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), bodyMat);
   g.add(torso);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1), skinMat);
-  head.position.set(0, 1.5, 0); g.add(head);
-  const larm = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), torsoMat);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), skinMat);
+  head.position.set(0, 1.7, 0); g.add(head);
+  const larm = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), bodyMat);
   larm.position.set(-1.5, 0, 0); g.add(larm);
-  const rarm = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), torsoMat);
+  const rarm = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), bodyMat);
   rarm.position.set(1.5, 0, 0); g.add(rarm);
-  const lleg = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), torsoMat);
+  const lleg = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), bodyMat);
   lleg.position.set(-0.5, -2, 0); g.add(lleg);
-  const rleg = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), torsoMat);
+  const rleg = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), bodyMat);
   rleg.position.set(0.5, -2, 0); g.add(rleg);
 
   const canvas = document.createElement('canvas');
   canvas.width = 256; canvas.height = 64;
   const ctx = canvas.getContext('2d');
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
   sprite.scale.set(7, 1.75, 1);
   sprite.position.set(0, 3.4, 0);
@@ -4326,14 +4519,19 @@ function setPlayerLabel(g, text) {
 function updatePlayers(players) {
   const seen = {};
   for (const p of players) {
-    seen[p.userId] = true;
-    let g = playerMeshes[p.userId];
+    // Skip drawing a synthetic mesh for the local player (the streamed client's own
+    // character). Their real character parts are already in the scene / dynamic stream,
+    // so drawing a synthetic one produced a duplicate.
+    if (p.isLocal) continue;
+
+    const key = String(p.userId);
+    seen[key] = true;
+    let g = playerMeshes[key];
     if (!g) {
       let col = 0x7dc9e0;
       if (p.teamColor) col = (Math.round(p.teamColor[0]*255) << 16) | (Math.round(p.teamColor[1]*255) << 8) | Math.round(p.teamColor[2]*255);
-      else if (p.isLocal) col = 0x7850ff;
-      g = makePlayerMesh(col);
-      playerMeshes[p.userId] = g;
+      g = makePlayerMesh(col, key);
+      playerMeshes[key] = g;
       playersGroup.add(g);
     }
     const cf = p.cf;
@@ -4467,9 +4665,15 @@ function animate() {
 }
 animate();
 
+// ── 60 Hz stream polling (with an overlap guard so requests don't stack) ──
+const POLL_INTERVAL_MS = 16; // ~60 Hz target
+let pollBusy = false;
+
 async function poll() {
+  if (pollBusy) { setTimeout(poll, POLL_INTERVAL_MS); return; }
+  pollBusy = true;
   try {
-    const r = await fetch('/api/watch/stream/' + USER_ID + '?t=' + Date.now());
+    const r = await fetch('/api/watch/stream/' + USER_ID + '?t=' + Date.now(), { cache: 'no-store' });
     const res = await r.json();
     const statusEl = document.getElementById('hudStatus');
     const staleMsg = document.getElementById('staleMsg');
@@ -4515,7 +4719,8 @@ async function poll() {
     statusEl.classList.add('dead');
     statusEl.innerHTML = '<span class="dot"></span> ERROR';
   }
-  setTimeout(poll, 120);
+  pollBusy = false;
+  setTimeout(poll, POLL_INTERVAL_MS);
 }
 
 window.addEventListener('error', (e) => {
@@ -4561,4 +4766,5 @@ server.listen(PORT, async () => {
   console.log(`[boot] AdSense client: ${ADSENSE_CLIENT}`);
   console.log(`[boot] scripts loaded: ${SCRIPTS.length} (${SCRIPTS.map(s => s.slug).join(", ")})`);
   console.log(`[boot] watch dir: ${WATCH_DIR}`);
+  console.log(`[boot] tex cache dir: ${TEX_DIR}`);
 });
