@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.7.0  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Watch 3D)
+--  Universal Hub v3.7.1  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Watch 3D)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -67,7 +67,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.7.0",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.7.1",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -595,7 +595,7 @@ C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,60), Font=Enum.Fon
 -- ═══════════════════════════════════════════════════════════════
 local WATCH_TICK = 0.05
 local DYNAMIC_RADIUS = 300
-local MAX_SCENE_PARTS = 30000
+local MAX_SCENE_PARTS = 15000      -- lower this if the executor chokes on the upload
 
 local Watch = { on=false, sceneCached=false, stats={sent=0,errors=0} }
 
@@ -607,24 +607,38 @@ local function watchHttpGet(path)
     return nil
 end
 
+-- Returns (data, errMsg). errMsg is nil on success.
+-- If the server rejects the body (413) or the request itself fails, we surface
+-- the HTTP status code so the caller can log it instead of silently dropping it.
 local function watchHttpPost(path, body)
-    if not request then return nil end
+    if not request then return nil, "no request() function available" end
+    local payload = HttpService:JSONEncode(body)
     local ok, resp = pcall(function()
         return request({
             Url = RELAY_HTTP .. path,
             Method = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body = HttpService:JSONEncode(body),
+            Body = payload,
         })
     end)
-    if not ok or not resp or not resp.Body then return nil end
+    if not ok then return nil, "request() error: " .. tostring(resp) end
+    if not resp then return nil, "no response table" end
+    local status = resp.StatusCode
+    if not resp.Body or resp.Body == "" then return nil, "HTTP " .. tostring(status) .. " (empty body)" end
     local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp.Body)
-    if ok2 then return data end
-    return nil
+    if not ok2 then return nil, "HTTP " .. tostring(status) .. " (bad json: " .. tostring(resp.Body):sub(1,120) .. ")" end
+    if status and (status < 200 or status >= 300) then return nil, "HTTP " .. tostring(status) .. " " .. tostring(data and (data.error or data.message) or "") end
+    return data, nil
+end
+
+-- Round to N decimals — cuts the JSON payload roughly 3x without visible loss.
+local function round(v, n)
+    if type(v) ~= "number" then return v end
+    local m = 10 ^ (n or 0)
+    return math.floor(v * m + 0.5) / m
 end
 
 -- Export a BasePart as [x,y,z, r00..r22, sx,sy,sz, r,g,b, transparency, shape]
--- shape: 0=Box 1=Ball 2=Cylinder 3=Wedge
 local function exportPart(obj)
     if not obj:IsA("BasePart") then return nil end
     local cf = obj.CFrame
@@ -642,11 +656,13 @@ local function exportPart(obj)
         elseif pt == Enum.PartType.Cylinder then shape = 2 end
     end
     return {
-        x, y, z,
-        R00, R01, R02, R10, R11, R12, R20, R21, R22,
-        size.X, size.Y, size.Z,
-        col.R, col.G, col.B,
-        obj.Transparency,
+        round(x, 2), round(y, 2), round(z, 2),
+        round(R00, 3), round(R01, 3), round(R02, 3),
+        round(R10, 3), round(R11, 3), round(R12, 3),
+        round(R20, 3), round(R21, 3), round(R22, 3),
+        round(size.X, 2), round(size.Y, 2), round(size.Z, 2),
+        round(col.R, 3), round(col.G, 3), round(col.B, 3),
+        round(obj.Transparency, 2),
         shape,
     }
 end
@@ -682,9 +698,8 @@ local function watchEnsureScene()
     local parts = exportWorkspace()
     warn("[Watch3D] Exported " .. #parts .. " parts in " .. string.format("%.2f", os.clock()-t0) .. "s")
     if #parts == 0 then
-        warn("[Watch3D] No parts exported")
-        Watch.sceneCached = true
-        return true
+        warn("[Watch3D] No parts exported — bailing")
+        return false
     end
     local payload = {
         placeId = game.PlaceId,
@@ -695,13 +710,20 @@ local function watchEnsureScene()
     pcall(function()
         payload.placeName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
     end)
-    local up = watchHttpPost("/api/watch/scene/" .. pid, payload)
+
+    -- Report payload size so we can tell if we're hitting an executor or server cap.
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(payload) end)
+    if ok and encoded then
+        warn("[Watch3D] Payload size: " .. string.format("%.2f", #encoded / (1024*1024)) .. " MB")
+    end
+
+    local up, err = watchHttpPost("/api/watch/scene/" .. pid, payload)
     if up and up.ok then
         warn("[Watch3D] Scene upload OK — " .. tostring(up.parts) .. " parts stored")
         Watch.sceneCached = true
         return true
     end
-    warn("[Watch3D] Scene upload FAILED")
+    warn("[Watch3D] Scene upload FAILED: " .. tostring(err))
     return false
 end
 
@@ -750,7 +772,12 @@ local function collectPlayers()
                     userId = plr.UserId,
                     name = plr.Name,
                     displayName = plr.DisplayName,
-                    cf = { x, y, z, R00, R01, R02, R10, R11, R12, R20, R21, R22 },
+                    cf = {
+                        round(x, 2), round(y, 2), round(z, 2),
+                        round(R00, 3), round(R01, 3), round(R02, 3),
+                        round(R10, 3), round(R11, 3), round(R12, 3),
+                        round(R20, 3), round(R21, 3), round(R22, 3),
+                    },
                     health = hum and hum.Health or 0,
                     maxHealth = hum and hum.MaxHealth or 100,
                     isLocal = (plr == LP),
@@ -777,7 +804,12 @@ local function watchStreamOnce()
     local camData = nil
     if cok then
         camData = {
-            cf = { cx, cy, cz, c00, c01, c02, c10, c11, c12, c20, c21, c22 },
+            cf = {
+                round(cx, 2), round(cy, 2), round(cz, 2),
+                round(c00, 3), round(c01, 3), round(c02, 3),
+                round(c10, 3), round(c11, 3), round(c12, 3),
+                round(c20, 3), round(c21, 3), round(c22, 3),
+            },
             fov = cam.FieldOfView,
             vw = cam.ViewportSize.X,
             vh = cam.ViewportSize.Y,
@@ -802,7 +834,19 @@ local function watchStart()
     Watch.on = true
     warn("[Watch3D] === WATCH 3D ENABLED ===")
     spawnTask(function()
-        watchEnsureScene()
+        -- Keep retrying the scene export until it lands (or watch is turned off).
+        -- Previously this was attempted once; a single 413/tiny failure left the
+        -- viewer stuck on "scene not cached yet" forever.
+        while Watch.on and not Watch.sceneCached do
+            local ok = watchEnsureScene()
+            if ok then break end
+            warn("[Watch3D] scene export failed — retrying in 10s...")
+            local waited = 0
+            while Watch.on and not Watch.sceneCached and waited < 10 do
+                waitTask(1); waited = waited + 1
+            end
+        end
+
         local lastTick = 0
         while Watch.on do
             local now = os.clock()
@@ -836,13 +880,13 @@ Button(watchTab, "Force Re-Export Scene", function()
     Watch.sceneCached = false
     local ok = watchEnsureScene()
     if ok then pcall(function() notify("Watch3D", "Scene cached", T.Good) end)
-    else pcall(function() notify("Watch3D", "Scene export failed", T.Bad) end) end
+    else pcall(function() notify("Watch3D", "Scene export failed — see F9 console", T.Bad) end) end
 end)
 
 -- About
 Section(aboutTab, "Info")
 C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,70), Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.7.0\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-FK, Walk Fling, Watch 3D.",
+    Text="Universal Hub v3.7.1\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Walk Fling, Watch 3D.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab})
 
 spawnTask(function()
