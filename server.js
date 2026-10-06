@@ -4163,7 +4163,7 @@ app.get("/watch/:userId", (req, res) => {
     <div class="scard">
       <div class="lbl">Status</div>
       <div id="staleMsg" style="color:#ff9a9a;font-size:12px;text-align:center;padding:6px 0;display:none"></div>
-      <div style="color:#8a8a9a;font-size:11.5px;line-height:1.55">Streamed at ~60 Hz from the target's client. The scene is exported once per place and cached on the server.</div>
+      <div style="color:#8a8a9a;font-size:11.5px;line-height:1.55">Streamed at ~30 Hz from the target's client. The scene is exported once per place and cached on the server.</div>
     </div>
   </div>
 </div>
@@ -4230,15 +4230,9 @@ const GEO_WEDGE = (() => {
   g.computeVertexNormals();
   return g;
 })();
-const GEO_HEAD = (() => {
-  // Head: slightly narrower box with a front face that can take a face decal
-  const g = new THREE.BoxGeometry(1, 1, 1);
-  return g;
-})();
-const GEO_MESH = (() => {
-  // "MeshPart" / accessory approximation: rounded-ish shape using a low-poly sphere
-  return new THREE.SphereGeometry(0.5, 12, 8);
-})();
+const GEO_HEAD = new THREE.BoxGeometry(1, 1, 1);
+const GEO_MESH = new THREE.SphereGeometry(0.5, 12, 8);
+const GEO_LIST = [GEO_BOX, GEO_BALL, GEO_CYL, GEO_WEDGE, GEO_HEAD, GEO_MESH];
 
 const MAT_OPAQUE = new THREE.MeshLambertMaterial({ color: 0xffffff });
 const MAT_TRANSPARENT = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
@@ -4251,18 +4245,23 @@ let sceneLoaded = false;
 let lastPlaceId = null;
 let lastFpsTime = performance.now();
 let frameCount = 0;
+let followInitialized = false;
+let lastPlayerListHash = '__init__';
+const DYNAMIC_POOL = [null, null, null, null, null, null];
+const dynamicTexturedPool = [];
 
 // ── Texture loading ──
 const texLoader = new THREE.TextureLoader();
 texLoader.setCrossOrigin('anonymous');
-const texPromiseCache = new Map(); // assetId -> Promise<THREE.Texture|null>
-const texReadyCache = new Map();   // assetId -> THREE.Texture | null (once loaded)
+const texPromiseCache = new Map();
+const texReadyCache = new Map();
+const texListeners = new Set();
 
 function getTexture(assetId) {
   if (assetId == null || assetId === 0 || assetId === "") return null;
   const key = String(assetId);
   if (texReadyCache.has(key)) return texReadyCache.get(key);
-  if (texPromiseCache.has(key)) return null; // still loading; caller will be notified when resolved
+  if (texPromiseCache.has(key)) return null;
   const p = new Promise((resolve) => {
     texLoader.load(
       '/api/tex/' + key,
@@ -4275,7 +4274,6 @@ function getTexture(assetId) {
         tex.needsUpdate = true;
         texReadyCache.set(key, tex);
         texPromiseCache.delete(key);
-        // Notify any listeners that this texture finished loading
         for (const cb of texListeners) cb(key, tex);
         resolve(tex);
       },
@@ -4291,9 +4289,6 @@ function getTexture(assetId) {
   return null;
 }
 
-// Texture load listeners let us re-bind materials after async load
-const texListeners = new Set();
-
 function bindTextureWhenReady(assetId, cb) {
   const key = String(assetId);
   const ready = texReadyCache.get(key);
@@ -4303,7 +4298,6 @@ function bindTextureWhenReady(assetId, cb) {
   getTexture(key);
 }
 
-// ── Part vertex builder ──
 function partToMatrix(p) {
   const m = new THREE.Matrix4();
   m.set(
@@ -4315,9 +4309,7 @@ function partToMatrix(p) {
   return m;
 }
 
-// ── Static scene (fast path: instancing for untextured, individual meshes for textured) ──
-let currentSceneSignature = null;
-
+// ── Static scene ──
 function buildStaticScene(parts) {
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   if (!parts || parts.length === 0) { sceneLoaded = true; return; }
@@ -4342,96 +4334,6 @@ function buildStaticScene(parts) {
   function makeInst(list, geo) {
     if (list.length === 0) return;
     const mesh = new THREE.InstancedMesh(geo, MAT_OPAQUE, list.length);
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const pos = new THREE.Vector3();
-    const scale = new THREE.Vector3();
-    const rotM = new THREE.Matrix4();
-    const color = new THREE.Color();
-    for (let i = 0; i < list.length; i++) {
-      const p = list[i];
-      pos.set(p[0], p[1], p[2]);
-      rotM.set(
-        p[3], p[4], p[5], 0,
-        p[6], p[7], p[8], 0,
-        p[9], p[10], p[11], 0,
-        0, 0, 0, 1
-      );
-      q.setFromRotationMatrix(rotM);
-      scale.set(p[12], p[13], p[14]);
-      m.compose(pos, q, scale);
-      mesh.setMatrixAt(i, m);
-      color.setRGB(p[15], p[16], p[17]);
-      mesh.setColorAt(i, color);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    worldGroup.add(mesh);
-  }
-
-  makeInst(byShape[0] || [], GEO_BOX);
-  makeInst(byShape[1] || [], GEO_BALL);
-  makeInst(byShape[2] || [], GEO_CYL);
-  makeInst(byShape[3] || [], GEO_WEDGE);
-  makeInst(byShape[4] || [], GEO_HEAD);
-  makeInst(byShape[5] || [], GEO_MESH);
-
-  // Transparent untextured parts
-  for (const p of transpList) {
-    const sh = p[20] | 0;
-    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : sh === 4 ? GEO_HEAD : sh === 5 ? GEO_MESH : GEO_BOX;
-    const mat = MAT_TRANSPARENT.clone();
-    mat.color.setRGB(p[15], p[16], p[17]);
-    mat.opacity = Math.max(0.08, 1 - p[19]);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(p[0], p[1], p[2]);
-    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
-    mesh.scale.set(p[12], p[13], p[14]);
-    worldGroup.add(mesh);
-  }
-
-  // Textured parts (individual meshes with async texture binding)
-  for (const p of textured) {
-    const sh = p[20] | 0;
-    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : sh === 4 ? GEO_HEAD : sh === 5 ? GEO_MESH : GEO_BOX;
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const tintR = p[15], tintG = p[16], tintB = p[17];
-    // If the part has no explicit texture tint, use white; else tint the texture with the color
-    mat.color.setRGB(tintR, tintG, tintB);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(p[0], p[1], p[2]);
-    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
-    mesh.scale.set(p[12], p[13], p[14]);
-    if (p[19]) { mat.transparent = true; mat.opacity = Math.max(0.08, 1 - p[19]); }
-    worldGroup.add(mesh);
-    const tid = p[21];
-    bindTextureWhenReady(tid, (tex) => {
-      if (tex) { mat.map = tex; mat.needsUpdate = true; }
-    });
-  }
-
-  sceneLoaded = true;
-}
-
-function rebuildDynamic(parts) {
-  while (dynamicGroup.children.length) dynamicGroup.remove(dynamicGroup.children[0]);
-  if (!parts || parts.length === 0) return;
-
-  const byShape = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
-  const textured = [];
-  for (let i = 0; i < parts.length; i++) {
-    const p = parts[i];
-    if (!Array.isArray(p)) continue;
-    const sh = p[20] | 0;
-    const tid = p[21];
-    if (tid) { textured.push(p); continue; }
-    if (!byShape[sh]) byShape[sh] = [];
-    byShape[sh].push(p);
-  }
-  function makeInst(list, geo) {
-    if (list.length === 0) return;
-    const mesh = new THREE.InstancedMesh(geo, MAT_OPAQUE, list.length);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const pos = new THREE.Vector3();
@@ -4451,8 +4353,10 @@ function rebuildDynamic(parts) {
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    dynamicGroup.add(mesh);
+    mesh.frustumCulled = false;
+    worldGroup.add(mesh);
   }
+
   makeInst(byShape[0] || [], GEO_BOX);
   makeInst(byShape[1] || [], GEO_BALL);
   makeInst(byShape[2] || [], GEO_CYL);
@@ -4460,9 +4364,109 @@ function rebuildDynamic(parts) {
   makeInst(byShape[4] || [], GEO_HEAD);
   makeInst(byShape[5] || [], GEO_MESH);
 
+  for (const p of transpList) {
+    const sh = p[20] | 0;
+    const geo = GEO_LIST[sh] || GEO_BOX;
+    const mat = MAT_TRANSPARENT.clone();
+    mat.color.setRGB(p[15], p[16], p[17]);
+    mat.opacity = Math.max(0.08, 1 - p[19]);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p[0], p[1], p[2]);
+    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
+    mesh.scale.set(p[12], p[13], p[14]);
+    worldGroup.add(mesh);
+  }
+
   for (const p of textured) {
     const sh = p[20] | 0;
-    const geo = sh === 1 ? GEO_BALL : sh === 2 ? GEO_CYL : sh === 3 ? GEO_WEDGE : sh === 4 ? GEO_HEAD : sh === 5 ? GEO_MESH : GEO_BOX;
+    const geo = GEO_LIST[sh] || GEO_BOX;
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    mat.color.setRGB(p[15], p[16], p[17]);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p[0], p[1], p[2]);
+    mesh.quaternion.setFromRotationMatrix(partToMatrix(p));
+    mesh.scale.set(p[12], p[13], p[14]);
+    if (p[19]) { mat.transparent = true; mat.opacity = Math.max(0.08, 1 - p[19]); }
+    worldGroup.add(mesh);
+    const tid = p[21];
+    bindTextureWhenReady(tid, (tex) => {
+      if (tex) { mat.map = tex; mat.needsUpdate = true; }
+    });
+  }
+
+  sceneLoaded = true;
+}
+
+// ── Dynamic parts (reuse instanced meshes; clear texture pool each frame) ──
+function getOrCreateDynamicInst(s, count) {
+  let mesh = DYNAMIC_POOL[s];
+  if (!mesh || mesh.instanceMatrix.count < count) {
+    if (mesh) { dynamicGroup.remove(mesh); mesh.dispose(); }
+    const cap = Math.max(64, count * 2);
+    mesh = new THREE.InstancedMesh(GEO_LIST[s], MAT_OPAQUE, cap);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    DYNAMIC_POOL[s] = mesh;
+    dynamicGroup.add(mesh);
+  }
+  mesh.count = count;
+  return mesh;
+}
+
+function rebuildDynamic(parts) {
+  // Drop previous textured dynamic meshes
+  for (const m of dynamicTexturedPool) {
+    dynamicGroup.remove(m);
+    if (m.material) m.material.dispose();
+  }
+  dynamicTexturedPool.length = 0;
+
+  if (!parts || parts.length === 0) {
+    for (let s = 0; s < 6; s++) if (DYNAMIC_POOL[s]) DYNAMIC_POOL[s].count = 0;
+    return;
+  }
+
+  const buckets = [[], [], [], [], [], []];
+  const textured = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!Array.isArray(p)) continue;
+    const sh = p[20] | 0;
+    const tid = p[21];
+    if (tid) { textured.push(p); continue; }
+    const b = (sh >= 0 && sh <= 5) ? sh : 0;
+    buckets[b].push(p);
+  }
+
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const pos = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  const rotM = new THREE.Matrix4();
+  const color = new THREE.Color();
+
+  for (let s = 0; s < 6; s++) {
+    const list = buckets[s];
+    const mesh = getOrCreateDynamicInst(s, list.length);
+    if (list.length === 0) continue;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      pos.set(p[0], p[1], p[2]);
+      rotM.set(p[3],p[4],p[5],0, p[6],p[7],p[8],0, p[9],p[10],p[11],0, 0,0,0,1);
+      q.setFromRotationMatrix(rotM);
+      scale.set(p[12], p[13], p[14]);
+      m.compose(pos, q, scale);
+      mesh.setMatrixAt(i, m);
+      color.setRGB(p[15], p[16], p[17]);
+      mesh.setColorAt(i, color);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+
+  for (const p of textured) {
+    const sh = p[20] | 0;
+    const geo = GEO_LIST[sh] || GEO_BOX;
     const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(p[15], p[16], p[17]) });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(p[0], p[1], p[2]);
@@ -4470,6 +4474,7 @@ function rebuildDynamic(parts) {
     mesh.scale.set(p[12], p[13], p[14]);
     if (p[19]) { mat.transparent = true; mat.opacity = Math.max(0.08, 1 - p[19]); }
     dynamicGroup.add(mesh);
+    dynamicTexturedPool.push(mesh);
     const tid = p[21];
     bindTextureWhenReady(tid, (tex) => {
       if (tex) { mat.map = tex; mat.needsUpdate = true; }
@@ -4477,8 +4482,6 @@ function rebuildDynamic(parts) {
   }
 }
 
-// Blocky humanoid for remote players (the target's own body is already in the scene,
-// so we never build a synthetic mesh for the local player — that was the "duplicate").
 function makePlayerMesh(colorHex, userId) {
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshLambertMaterial({ color: colorHex });
@@ -4508,10 +4511,13 @@ function makePlayerMesh(colorHex, userId) {
   g.userData.labelCanvas = canvas;
   g.userData.labelCtx = ctx;
   g.userData.labelTex = tex;
+  g.userData.labelText = '';
   return g;
 }
 
 function setPlayerLabel(g, text) {
+  if (g.userData.labelText === text) return;
+  g.userData.labelText = text;
   const c = g.userData.labelCanvas;
   const ctx = g.userData.labelCtx;
   ctx.clearRect(0, 0, c.width, c.height);
@@ -4528,11 +4534,7 @@ function setPlayerLabel(g, text) {
 function updatePlayers(players) {
   const seen = {};
   for (const p of players) {
-    // Skip drawing a synthetic mesh for the local player (the streamed client's own
-    // character). Their real character parts are already in the scene / dynamic stream,
-    // so drawing a synthetic one produced a duplicate.
     if (p.isLocal) continue;
-
     const key = String(p.userId);
     seen[key] = true;
     let g = playerMeshes[key];
@@ -4586,9 +4588,19 @@ function colorCss(p) {
 function renderPlayerList(players) {
   const box = document.getElementById('playerList');
   if (!players || players.length === 0) {
+    if (lastPlayerListHash === '__empty__') return;
+    lastPlayerListHash = '__empty__';
     box.innerHTML = '<div style="color:#6a6a7a;font-size:12px;text-align:center;padding:14px 0">No players</div>';
     return;
   }
+  // Cheap content hash so we don't thrash the DOM every poll
+  let h = '';
+  for (const p of players) {
+    h += p.userId + '|' + (p.displayName || p.name || '') + '|' + Math.round(p.health || 0) + '|' + (p.isLocal ? 1 : 0) + ';';
+  }
+  if (h === lastPlayerListHash) return;
+  lastPlayerListHash = h;
+
   const sorted = players.slice().sort((a, b) => {
     if (a.isLocal && !b.isLocal) return -1;
     if (!a.isLocal && b.isLocal) return 1;
@@ -4610,11 +4622,15 @@ function renderPlayerList(players) {
 // Camera modes
 document.getElementById('btnOrbit').addEventListener('click', function(){
   camMode = 'orbit';
+  controls.enabled = true;
+  followInitialized = false;
   document.querySelectorAll('#controls .ctrlbtn').forEach(b => b.classList.remove('active'));
   this.classList.add('active');
 });
 document.getElementById('btnFollow').addEventListener('click', function(){
   camMode = 'follow';
+  controls.enabled = true;
+  followInitialized = false;
   document.querySelectorAll('#controls .ctrlbtn').forEach(b => b.classList.remove('active'));
   this.classList.add('active');
   const me = currentData && (currentData.players || []).find(p => p.isLocal);
@@ -4622,10 +4638,12 @@ document.getElementById('btnFollow').addEventListener('click', function(){
     const target = new THREE.Vector3(me.cf[0], me.cf[1] + 3, me.cf[2]);
     controls.target.copy(target);
     camera.position.copy(target).add(new THREE.Vector3(28, 22, 28));
+    followInitialized = true;
   }
 });
 document.getElementById('btnPov').addEventListener('click', function(){
   camMode = 'pov';
+  controls.enabled = false;
   document.querySelectorAll('#controls .ctrlbtn').forEach(b => b.classList.remove('active'));
   this.classList.add('active');
 });
@@ -4633,6 +4651,7 @@ document.getElementById('btnReset').addEventListener('click', function(){
   controls.target.set(0, 0, 0);
   camera.position.set(60, 70, 90);
   camera.quaternion.set(0, 0, 0, 1);
+  followInitialized = false;
 });
 
 window.addEventListener('error', (e) => {
@@ -4650,18 +4669,30 @@ window.addEventListener('unhandledrejection', (e) => {
 
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();
 
+  // Follow logic runs BEFORE controls.update() so we can translate the camera
+  // by the same delta as the target — otherwise OrbitControls keeps the camera
+  // pinned to its old world position while the target moves.
   if (camMode === 'follow' && currentData) {
     const me = (currentData.players || []).find(p => p.isLocal);
     if (me) {
       const target = new THREE.Vector3(me.cf[0], me.cf[1] + 3, me.cf[2]);
-      controls.target.lerp(target, 0.15);
-      if (camera.position.distanceTo(target) > 200) {
+      if (!followInitialized) {
+        controls.target.copy(target);
         camera.position.copy(target).add(new THREE.Vector3(28, 22, 28));
+        followInitialized = true;
+      } else {
+        const prev = controls.target.clone();
+        controls.target.lerp(target, 0.22);
+        const delta = controls.target.clone().sub(prev);
+        camera.position.add(delta);
       }
     }
-  } else if (camMode === 'pov' && currentData && currentData.camera) {
+  }
+
+  if (controls.enabled) controls.update();
+
+  if (camMode === 'pov' && currentData && currentData.camera) {
     const cf = currentData.camera.cf;
     camera.position.set(cf[0], cf[1], cf[2]);
     const rotM = new THREE.Matrix4().set(
@@ -4687,8 +4718,8 @@ function animate() {
 }
 animate();
 
-// ── 60 Hz stream polling (with an overlap guard so requests don't stack) ──
-const POLL_INTERVAL_MS = 16; // ~60 Hz target
+// ── ~30 Hz stream polling (with an overlap guard so requests don't stack) ──
+const POLL_INTERVAL_MS = 33;
 let pollBusy = false;
 
 async function poll() {
