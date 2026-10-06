@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
---  Universal Hub v3.5.4  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Exec Counter)
+--  Universal Hub v3.7.0  (Games, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Watch 3D)
 -- ═══════════════════════════════════════════════════════════════
 
 do
@@ -23,7 +23,6 @@ local RELAY_HTTP = "https://serverssszz.onrender.com"
 local WebSocket  = WebSocket or (syn and syn.websocket) or nil
 local loadstring = loadstring or nil
 local request    = request or (syn and syn.request) or http_request
-local gethui     = gethui or (syn and syn.protect_gui and function() end) or nil
 
 local function fetchUrl(url)
     local ok, body = pcall(function() return game:HttpGet(url) end)
@@ -58,7 +57,6 @@ local CI = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local spawnTask = (task and task.spawn) or (coroutine and function(fn, ...) coroutine.wrap(fn)(...) end) or function(fn, ...) fn(...) end
 local waitTask  = (task and task.wait) or wait
 
--- Window
 local gui = C("ScreenGui",{Name="UniversalHub",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,Parent=LP:WaitForChild("PlayerGui")})
 local shadow = C("Frame",{BackgroundColor3=T.Shadow,BackgroundTransparency=1,Size=UDim2.new(0,440,0,320),Position=UDim2.new(0.5,-220,0.5,-146),ZIndex=0,Parent=gui})
 corner(shadow,14)
@@ -69,7 +67,7 @@ local titleBar = C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Si
 corner(titleBar,10)
 C("Frame",{BackgroundColor3=T.Panel,BackgroundTransparency=1,Size=UDim2.new(1,0,0,8),Position=UDim2.new(0,0,1,-8),BorderSizePixel=0,ZIndex=2,Parent=titleBar})
 local titleDivider = C("Frame",{BackgroundColor3=T.Stroke2,BackgroundTransparency=1,Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),BorderSizePixel=0,ZIndex=3,Parent=titleBar})
-local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.5.4",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
+local titleLbl = C("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,14,0,0),Size=UDim2.new(1,-70,1,0),Font=Enum.Font.GothamBold,Text="Universal Hub — v3.7.0",TextColor3=T.Text,TextTransparency=1,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,Parent=titleBar})
 
 local minBtn = C("TextButton",{BackgroundColor3=T.Hover,BackgroundTransparency=1,Size=UDim2.new(0,20,0,20),Position=UDim2.new(1,-46,0.5,-10),Font=Enum.Font.GothamBold,Text="□",TextColor3=T.Text,TextTransparency=1,TextSize=11,AutoButtonColor=false,BorderSizePixel=0,ZIndex=3,Parent=titleBar})
 corner(minBtn,5)
@@ -237,28 +235,16 @@ end
 -- ═══════════════════════════════════════════════════════════════
 --  CHARACTER TRAIT STATE
 -- ═══════════════════════════════════════════════════════════════
-local TRAITS = {
-    walkOn = false,
-    walkSpeed = 100,
-    jumpOn = false,
-    jumpPower = 150,
-    flyOn = false,
-}
+local TRAITS = { walkOn=false, walkSpeed=100, jumpOn=false, jumpPower=150, flyOn=false }
 
 local function applyTraits(char)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     if TRAITS.walkOn then hum.WalkSpeed = TRAITS.walkSpeed end
-    if TRAITS.jumpOn then
-        hum.UseJumpPower = true
-        hum.JumpPower = TRAITS.jumpPower
-    end
+    if TRAITS.jumpOn then hum.UseJumpPower = true; hum.JumpPower = TRAITS.jumpPower end
 end
 
-LP.CharacterAdded:Connect(function(char)
-    waitTask(0.4)
-    applyTraits(char)
-end)
+LP.CharacterAdded:Connect(function(char) waitTask(0.4); applyTraits(char) end)
 
 -- ═══════════════════════════════════════════════════════════════
 --  FLY
@@ -297,50 +283,30 @@ local function startFly()
     end)
 
     local bv = Instance.new("BodyVelocity")
-    bv.Name = "_UHFlyBV"
-    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    bv.Velocity = Vector3.new(0, 0, 0)
-    bv.Parent = root
-
+    bv.Name = "_UHFlyBV"; bv.MaxForce = Vector3.new(9e9, 9e9, 9e9); bv.Velocity = Vector3.new(0,0,0); bv.Parent = root
     local bg = Instance.new("BodyGyro")
-    bg.Name = "_UHFlyBG"
-    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bg.P = 9e4
-    bg.D = 50
-    bg.CFrame = workspace.CurrentCamera.CFrame
-    bg.Parent = root
-
-    flyRefs.bv = bv
-    flyRefs.bg = bg
-    TRAITS.flyOn = true
-
+    bg.Name = "_UHFlyBG"; bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9); bg.P = 9e4; bg.D = 50; bg.CFrame = workspace.CurrentCamera.CFrame; bg.Parent = root
+    flyRefs.bv = bv; flyRefs.bg = bg; TRAITS.flyOn = true
     local FLY_SPEED = 60
 
     flyRefs.conn = RunService.RenderStepped:Connect(function()
         if not TRAITS.flyOn then return end
-        local c = LP.Character
-        if not c then return end
+        local c = LP.Character; if not c then return end
         local r = c:FindFirstChild("HumanoidRootPart")
         local h = c:FindFirstChildOfClass("Humanoid")
         if not r or not h then return end
-
-        local bvv = r:FindFirstChild("_UHFlyBV")
-        local bgg = r:FindFirstChild("_UHFlyBG")
+        local bvv = r:FindFirstChild("_UHFlyBV"); local bgg = r:FindFirstChild("_UHFlyBG")
         if not bvv or not bgg then return end
-
         h.PlatformStand = true
         local cam = workspace.CurrentCamera
         bgg.CFrame = cam.CFrame
-
-        local dir = Vector3.new(0, 0, 0)
+        local dir = Vector3.new(0,0,0)
         if flyRefs.controlModule then
             local ok, v = pcall(function() return flyRefs.controlModule:GetMoveVector() end)
             if ok and v then dir = v end
         end
-
         local camCF = cam.CFrame
-        bvv.Velocity = (camCF.LookVector * (-dir.Z * FLY_SPEED))
-                     + (camCF.RightVector * (dir.X * FLY_SPEED))
+        bvv.Velocity = (camCF.LookVector * (-dir.Z * FLY_SPEED)) + (camCF.RightVector * (dir.X * FLY_SPEED))
     end)
 
     flyRefs.charConn = LP.CharacterAdded:Connect(function()
@@ -351,17 +317,10 @@ end
 
 -- ═══════════════════════════════════════════════════════════════
 --  WALK FLING
---  Adapted from Infinite Yield's walkfling command.
---  Slams the character's Velocity to an absurd value for one frame,
---  resets it, then adds a tiny vertical nudge every cycle. Anything
---  welded or in contact with the character receives the replicated
---  force before the reset lands — that's the fling.
 -- ═══════════════════════════════════════════════════════════════
-local WalkFling = { on = false, thread = nil }
-
+local WalkFling = { on=false, thread=nil }
 local function stopWalkFling()
-    WalkFling.on = false
-    WalkFling.thread = nil
+    WalkFling.on = false; WalkFling.thread = nil
     local char = LP.Character
     if char then
         for _, p in ipairs(char:GetDescendants()) do
@@ -369,42 +328,27 @@ local function stopWalkFling()
         end
     end
 end
-
 local function walkFlingLoop()
     while WalkFling.on do
         RunService.Heartbeat:Wait()
         if not WalkFling.on then break end
-
         local character = LP.Character
         if not character or not character.Parent then continue end
-
         local root = character:FindFirstChild("HumanoidRootPart")
         if not root or not root.Parent then continue end
-
-        -- noclip while flinging so we don't snag on walls
         for _, p in ipairs(character:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide then
-                p.CanCollide = false
-            end
+            if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end
         end
-
         local vel = root.Velocity
         root.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
-
         RunService.RenderStepped:Wait()
         if not WalkFling.on then break end
-        if character.Parent and root.Parent then
-            root.Velocity = vel
-        end
-
+        if character.Parent and root.Parent then root.Velocity = vel end
         RunService.Stepped:Wait()
         if not WalkFling.on then break end
-        if character.Parent and root.Parent then
-            root.Velocity = vel + Vector3.new(0, 0.1, 0)
-        end
+        if character.Parent and root.Parent then root.Velocity = vel + Vector3.new(0, 0.1, 0) end
     end
 end
-
 local function startWalkFling()
     if WalkFling.on then return end
     WalkFling.on = true
@@ -416,7 +360,6 @@ end
 -- ═══════════════════════════════════════════════════════════════
 local antiAfkConn = nil
 local antiAfkDisabledHandlers = {}
-
 local function startAntiAfk()
     if getconnections then
         local ok, conns = pcall(getconnections, LP.Idled)
@@ -428,7 +371,6 @@ local function startAntiAfk()
             end
         end
     end
-
     if antiAfkConn then antiAfkConn:Disconnect() end
     antiAfkConn = LP.Idled:Connect(function()
         local VIM = game:GetService("VirtualInputManager")
@@ -440,7 +382,6 @@ local function startAntiAfk()
         end
     end)
 end
-
 local function stopAntiAfk()
     if antiAfkConn then antiAfkConn:Disconnect(); antiAfkConn = nil end
     antiAfkDisabledHandlers = {}
@@ -450,36 +391,30 @@ end
 --  ESP
 -- ═══════════════════════════════════════════════════════════════
 local ESP = { on=false, teamCheck=true, container=nil, entries={} }
-local COLOR_TEAM    = Color3.fromRGB(50, 120, 255)
-local COLOR_ENEMY   = Color3.fromRGB(255, 50, 50)
-local COLOR_NEUTRAL = Color3.fromRGB(220, 220, 220)
+local COLOR_TEAM = Color3.fromRGB(50,120,255)
+local COLOR_ENEMY = Color3.fromRGB(255,50,50)
+local COLOR_NEUTRAL = Color3.fromRGB(220,220,220)
 
 local function isTeammate(player)
-    local myTeam = LP.Team
-    local theirTeam = player.Team
+    local myTeam = LP.Team; local theirTeam = player.Team
     if not myTeam or not theirTeam then return nil end
     return myTeam == theirTeam
 end
-
 local function espColorFor(player)
     if not ESP.teamCheck then return COLOR_NEUTRAL end
     local same = isTeammate(player)
     if same == nil then return COLOR_NEUTRAL end
     return same and COLOR_TEAM or COLOR_ENEMY
 end
-
 local function ensureContainer()
     if ESP.container and ESP.container.Parent then return ESP.container end
     local parent
     if gethui then pcall(function() parent = gethui() end) end
     if not parent then parent = game:GetService("CoreGui") end
     local folder = Instance.new("Folder")
-    folder.Name = "_UniversalHubESP"
-    folder.Parent = parent
-    ESP.container = folder
+    folder.Name = "_UniversalHubESP"; folder.Parent = parent; ESP.container = folder
     return folder
 end
-
 local function destroyESP()
     for _, entry in pairs(ESP.entries) do
         if entry.box then pcall(function() entry.box:Destroy() end) end
@@ -487,24 +422,20 @@ local function destroyESP()
     ESP.entries = {}
     if ESP.container then pcall(function() ESP.container:ClearAllChildren() end) end
 end
-
 local function refreshESP()
     if not ESP.on then return end
     local container = ensureContainer()
-
     for plr, entry in pairs(ESP.entries) do
         if not plr.Parent then
             if entry.box then pcall(function() entry.box:Destroy() end) end
             ESP.entries[plr] = nil
         end
     end
-
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LP then
             local char = plr.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local entry = ESP.entries[plr]
-
             if not hrp then
                 if entry and entry.box then
                     pcall(function() entry.box:Destroy() end)
@@ -514,14 +445,9 @@ local function refreshESP()
                 if not entry or entry.char ~= char or not entry.box.Parent then
                     if entry and entry.box then pcall(function() entry.box:Destroy() end) end
                     local box = Instance.new("BoxHandleAdornment")
-                    box.Name = "ESPB_" .. plr.UserId
-                    box.Adornee = hrp
-                    box.AlwaysOnTop = true
-                    box.ZIndex = 10
-                    box.Size = Vector3.new(4, 6, 4)
-                    box.Transparency = 0.5
-                    box.Color3 = espColorFor(plr)
-                    box.Parent = container
+                    box.Name = "ESPB_" .. plr.UserId; box.Adornee = hrp; box.AlwaysOnTop = true
+                    box.ZIndex = 10; box.Size = Vector3.new(4,6,4); box.Transparency = 0.5
+                    box.Color3 = espColorFor(plr); box.Parent = container
                     ESP.entries[plr] = { box = box, char = char }
                 else
                     local newColor = espColorFor(plr)
@@ -531,14 +457,9 @@ local function refreshESP()
         end
     end
 end
-
 spawnTask(function()
-    while true do
-        waitTask(1)
-        if ESP.on then pcall(refreshESP) end
-    end
+    while true do waitTask(1); if ESP.on then pcall(refreshESP) end end
 end)
-
 Players.PlayerRemoving:Connect(function(plr)
     local entry = ESP.entries[plr]
     if entry and entry.box then pcall(function() entry.box:Destroy() end) end
@@ -552,122 +473,59 @@ local gamesTab = makeTab("Games")
 local mainTab = makeTab("Main")
 local moveTab = makeTab("Movement")
 local espTab  = makeTab("ESP")
+local watchTab= makeTab("Watch")
 local aboutTab= makeTab("About")
 
--- ── Games ──
+-- Games
 Section(gamesTab, "Game Scripts")
-
 local ddgLoading = false
 Button(gamesTab, "Duck Duck (TAG) Script", function()
-    warn("[Games] 1. DDG button clicked")
-
-    if ddgLoading then
-        warn("[Games] DDG already loading — ignoring")
-        return
-    end
+    if ddgLoading then return end
     ddgLoading = true
-
     spawnTask(function()
         local ok, err = pcall(function()
-            local url = RELAY_HTTP .. "/ddg.lua"
-            warn("[Games] 2. Fetching DDG: " .. url)
-
-            local src = fetchUrl(url)
-            if not src or src == "" then
-                error("Empty response from " .. url)
-            end
-            warn("[Games] 3. Got " .. tostring(#src) .. " bytes")
-
+            local src = fetchUrl(RELAY_HTTP .. "/ddg.lua")
+            if not src or src == "" then error("Empty response") end
             local compiler = loadstring or load
-            if not compiler then
-                error("No loadstring/load available in this executor")
-            end
-
+            if not compiler then error("No loadstring/load available") end
             local fn = compiler(src)
-            if not fn then
-                error("Compilation failed — loadstring returned nil")
-            end
-
-            warn("[Games] 4. Executing DDG...")
+            if not fn then error("Compilation failed") end
             fn()
-            warn("[Games] 5. DDG finished")
         end)
-
         ddgLoading = false
-
-        if ok then
-            warn("[Games] DDG loaded successfully")
-            pcall(function() notify("Games", "Duck Duck Goose loaded!", T.Good) end)
-        else
-            warn("[Games] DDG failed: " .. tostring(err))
-            pcall(function() notify("Games", "Failed: " .. tostring(err), T.Bad) end)
-        end
+        if ok then pcall(function() notify("Games", "Duck Duck Goose loaded!", T.Good) end)
+        else warn("[Games] DDG failed: " .. tostring(err)); pcall(function() notify("Games", "Failed: " .. tostring(err), T.Bad) end) end
     end)
-
     pcall(function() notify("Games", "Loading Duck Duck Goose script...", T.Accent) end)
 end)
 
 local mm2Loading = false
 Button(gamesTab, "MM2 Script", function()
-    warn("[Games] 1. MM2 button clicked")
-
-    if mm2Loading then
-        warn("[Games] MM2 already loading — ignoring")
-        return
-    end
+    if mm2Loading then return end
     mm2Loading = true
-
     spawnTask(function()
         local ok, err = pcall(function()
-            local url = RELAY_HTTP .. "/mm2.lua"
-            warn("[Games] 2. Fetching MM2: " .. url)
-
-            local src = fetchUrl(url)
-            if not src or src == "" then
-                error("Empty response from " .. url)
-            end
-            warn("[Games] 3. Got " .. tostring(#src) .. " bytes")
-
+            local src = fetchUrl(RELAY_HTTP .. "/mm2.lua")
+            if not src or src == "" then error("Empty response") end
             local compiler = loadstring or load
-            if not compiler then
-                error("No loadstring/load available in this executor")
-            end
-
+            if not compiler then error("No loadstring/load available") end
             local fn = compiler(src)
-            if not fn then
-                error("Compilation failed — loadstring returned nil")
-            end
-
-            warn("[Games] 4. Executing MM2...")
+            if not fn then error("Compilation failed") end
             fn()
-            warn("[Games] 5. MM2 finished")
         end)
-
         mm2Loading = false
-
-        if ok then
-            warn("[Games] MM2 loaded successfully")
-            pcall(function() notify("Games", "MM2 script loaded!", T.Good) end)
-        else
-            warn("[Games] MM2 failed: " .. tostring(err))
-            pcall(function() notify("Games", "Failed: " .. tostring(err), T.Bad) end)
-        end
+        if ok then pcall(function() notify("Games", "MM2 script loaded!", T.Good) end)
+        else warn("[Games] MM2 failed: " .. tostring(err)); pcall(function() notify("Games", "Failed: " .. tostring(err), T.Bad) end) end
     end)
-
     pcall(function() notify("Games", "Loading MM2 script...", T.Accent) end)
 end)
 
 Section(gamesTab, "Info")
-C("TextLabel",{
-    BackgroundTransparency=1, Size=UDim2.new(1,0,0,110),
-    Font=Enum.Font.Gotham,
-    Text="Loads standalone game-specific hubs.\n\n• Duck Duck Goose Hub v4.3\n• MM2 Hub (Mm2 Hub) — Murder Mystery 2 script\n\nEach opens its own separate window once loaded.",
-    TextColor3=T.Dim, TextSize=11, TextWrapped=true,
-    TextXAlignment=Enum.TextXAlignment.Left,
-    TextYAlignment=Enum.TextYAlignment.Top, Parent=gamesTab,
-})
+C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,110), Font=Enum.Font.Gotham,
+    Text="Loads standalone game-specific hubs.\n\n• Duck Duck Goose Hub v4.3\n• MM2 Hub — Murder Mystery 2 script\n\nEach opens its own separate window once loaded.",
+    TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=gamesTab})
 
--- ── Main ──
+-- Main
 Section(mainTab, "Global Stats")
 local execValueLbl
 do
@@ -690,26 +548,17 @@ Toggle(mainTab, "Infinite Jump", false, function(on)
         if _G._infJump then _G._infJump:Disconnect(); _G._infJump = nil end
     end
 end)
-Toggle(mainTab, "Anti AFK", false, function(on)
-    if on then startAntiAfk() else stopAntiAfk() end
-end)
+Toggle(mainTab, "Anti AFK", false, function(on) if on then startAntiAfk() else stopAntiAfk() end end)
 Toggle(mainTab, "Full Bright", false, function(on)
     local l = game:GetService("Lighting")
-    if on then
-        _G._oldBright = l.Brightness; _G._oldAmb = l.Ambient
-        l.Brightness = 3; l.Ambient = Color3.fromRGB(178,178,178)
-    else
-        if _G._oldBright then l.Brightness = _G._oldBright end
-        if _G._oldAmb then l.Ambient = _G._oldAmb end
-    end
+    if on then _G._oldBright = l.Brightness; _G._oldAmb = l.Ambient; l.Brightness = 3; l.Ambient = Color3.fromRGB(178,178,178)
+    else if _G._oldBright then l.Brightness = _G._oldBright end; if _G._oldAmb then l.Ambient = _G._oldAmb end end
 end)
 
 Section(mainTab, "Combat")
-Toggle(mainTab, "Walk Fling", false, function(on)
-    if on then startWalkFling() else stopWalkFling() end
-end)
+Toggle(mainTab, "Walk Fling", false, function(on) if on then startWalkFling() else stopWalkFling() end end)
 
--- ── Movement ──
+-- Movement
 Section(moveTab, "Speed")
 Toggle(moveTab, "Fast Walk (100)", false, function(on)
     TRAITS.walkOn = on
@@ -722,51 +571,285 @@ Toggle(moveTab, "High Jump (150)", false, function(on)
     local char = LP.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if hum then
-        if on then
-            hum.UseJumpPower = true
-            hum.JumpPower = TRAITS.jumpPower
-        else
-            hum.UseJumpPower = true
-            hum.JumpPower = 50
-        end
+        if on then hum.UseJumpPower = true; hum.JumpPower = TRAITS.jumpPower
+        else hum.UseJumpPower = true; hum.JumpPower = 50 end
     end
 end)
-
 Section(moveTab, "Flight")
-Toggle(moveTab, "Fly", false, function(on)
-    if on then startFly() else stopFly() end
-end)
+Toggle(moveTab, "Fly", false, function(on) if on then startFly() else stopFly() end end)
 
--- ── ESP ──
+-- ESP
 Section(espTab, "Options")
 Toggle(espTab, "Enable ESP", false, function(on)
     ESP.on = on
     if on then ensureContainer(); refreshESP() else destroyESP() end
 end)
-Toggle(espTab, "Team Check", true, function(on)
-    ESP.teamCheck = on
-    if ESP.on then refreshESP() end
-end)
+Toggle(espTab, "Team Check", true, function(on) ESP.teamCheck = on; if ESP.on then refreshESP() end end)
 Section(espTab, "Info")
-C("TextLabel",{
-    BackgroundTransparency=1, Size=UDim2.new(1,0,0,60),
-    Font=Enum.Font.Gotham,
+C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,60), Font=Enum.Font.Gotham,
     Text="Boxes refresh every second.\nTeam Check ON:  blue = your team, red = enemy.\nTeam Check OFF: all boxes gray.",
-    TextColor3=T.Dim, TextSize=11, TextWrapped=true,
-    TextXAlignment=Enum.TextXAlignment.Left,
-    TextYAlignment=Enum.TextYAlignment.Top, Parent=espTab,
-})
+    TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=espTab})
 
--- ── About ──
+-- ═══════════════════════════════════════════════════════════════
+--  WATCH 3D  —  scene export + live streaming
+-- ═══════════════════════════════════════════════════════════════
+local WATCH_TICK = 0.05      -- stream tick (~20 Hz)
+local DYNAMIC_RADIUS = 300   -- studs around player for unanchored parts
+local MAX_SCENE_PARTS = 30000
+
+local Watch = {
+    on = false,
+    sceneCached = false,
+    stats = { sent = 0, errors = 0, sceneParts = 0 },
+}
+
+local function watchHttpGet(path)
+    local body = fetchUrl(RELAY_HTTP .. path)
+    if not body or body == "" then return nil end
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if ok then return data end
+    return nil
+end
+
+local function watchHttpPost(path, body)
+    if not request then return nil end
+    local ok, resp = pcall(function()
+        return request({
+            Url = RELAY_HTTP .. path,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = HttpService:JSONEncode(body),
+        })
+    end)
+    if not ok or not resp or not resp.Body then return nil end
+    local ok2, data = pcall(HttpService.JSONDecode, HttpService, resp.Body)
+    if ok2 then return data end
+    return nil
+end
+
+-- Export a single part into the compact array format.
+-- [x,y,z, r00,r01,r02,r10,r11,r12,r20,r21,r22, sx,sy,sz, r,g,b, transp, shape]
+-- shape: 0=Box, 1=Ball, 2=Cylinder, 3=Wedge
+local function exportPart(obj)
+    if not obj:IsA("BasePart") then return nil end
+    local cf = obj.CFrame
+    local ok, x, y, z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = pcall(function() return cf:GetComponents() end)
+    if not ok then return nil end
+    local size = obj.Size
+    local col = obj.Color
+    local shape = 0
+    if obj:IsA("Ball") then shape = 1
+    elseif obj:IsA("Cylinder") then shape = 2
+    elseif obj:IsA("WedgePart") then shape = 3
+    elseif obj:IsA("Part") then
+        local pt = obj.Shape
+        if pt == Enum.PartType.Ball then shape = 1
+        elseif pt == Enum.PartType.Cylinder then shape = 2 end
+    end
+    return {
+        x, y, z,
+        R00, R01, R02, R10, R11, R12, R20, R21, R22,
+        size.X, size.Y, size.Z,
+        col.R, col.G, col.B,
+        obj.Transparency,
+        shape,
+    }
+end
+
+local function exportWorkspace(maxParts)
+    maxParts = maxParts or MAX_SCENE_PARTS
+    local parts = {}
+    local ok, desc = pcall(function() return workspace:GetDescendants() end)
+    if not ok or not desc then return parts end
+    for _, obj in ipairs(desc) do
+        if #parts >= maxParts then break end
+        if obj:IsA("BasePart") and obj.Anchored then
+            if obj.Transparency < 0.98 then
+                local data = exportPart(obj)
+                if data then parts[#parts+1] = data end
+            end
+        end
+    end
+    return parts
+end
+
+local function watchEnsureScene()
+    if Watch.sceneCached then return true end
+    local pid = tostring(game.PlaceId)
+    local check = watchHttpGet("/api/watch/scene/" .. pid)
+    if check and check.exists then
+        warn("[Watch3D] Scene cache HIT for place " .. pid .. " (" .. tostring(check.parts or 0) .. " parts)")
+        Watch.sceneCached = true
+        return true
+    end
+    warn("[Watch3D] Scene cache MISS — exporting workspace...")
+    local t0 = os.clock()
+    local parts = exportWorkspace()
+    warn("[Watch3D] Exported " .. #parts .. " parts in " .. string.format("%.2f", os.clock()-t0) .. "s")
+    if #parts == 0 then
+        warn("[Watch3D] No parts exported (workspace empty?)")
+        Watch.sceneCached = true
+        return true
+    end
+    local payload = {
+        placeId = game.PlaceId,
+        jobId = game.JobId,
+        placeName = "Place " .. tostring(game.PlaceId),
+        parts = parts,
+    }
+    pcall(function()
+        payload.placeName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    end)
+    local up = watchHttpPost("/api/watch/scene/" .. pid, payload)
+    if up and up.ok then
+        warn("[Watch3D] Scene upload OK — " .. tostring(up.parts) .. " parts stored")
+        Watch.sceneCached = true
+        return true
+    end
+    warn("[Watch3D] Scene upload FAILED")
+    return false
+end
+
+-- Dynamic parts cache (unanchored parts) — refreshed every 2s
+local _dynCache, _dynCacheAt = nil, 0
+local function getUnanchored()
+    local now = os.clock()
+    if _dynCache and now - _dynCacheAt < 2 then return _dynCache end
+    local out = {}
+    local ok, desc = pcall(function() return workspace:GetDescendants() end)
+    if ok and desc then
+        for _, obj in ipairs(desc) do
+            if obj:IsA("BasePart") and not obj.Anchored then out[#out+1] = obj end
+        end
+    end
+    _dynCache = out; _dynCacheAt = now
+    return out
+end
+
+local function collectDynamic(center)
+    local out = {}
+    local r2 = DYNAMIC_RADIUS * DYNAMIC_RADIUS
+    for _, obj in ipairs(getUnanchored()) do
+        if obj.Parent then
+            local pos = obj.Position
+            local dx, dy, dz = pos.X - center.X, pos.Y - center.Y, pos.Z - center.Z
+            if dx*dx + dy*dy + dz*dz < r2 then
+                local data = exportPart(obj)
+                if data then out[#out+1] = data end
+            end
+        end
+    end
+    return out
+end
+
+local function collectPlayers()
+    local out = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local char = plr.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local ok, x, y, z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = pcall(function() return hrp.CFrame:GetComponents() end)
+            if ok then
+                local tc = plr.TeamColor and plr.TeamColor.Color
+                out[#out+1] = {
+                    userId = plr.UserId,
+                    name = plr.Name,
+                    displayName = plr.DisplayName,
+                    cf = { x, y, z, R00, R01, R02, R10, R11, R12, R20, R21, R22 },
+                    health = hum and hum.Health or 0,
+                    maxHealth = hum and hum.MaxHealth or 100,
+                    isLocal = (plr == LP),
+                    teamColor = tc and { tc.R, tc.G, tc.B } or nil,
+                    team = plr.Team and plr.Team.Name or nil,
+                }
+            end
+        end
+    end
+    return out
+end
+
+local function watchStreamOnce()
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    local myChar = LP.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local center = myRoot and myRoot.Position or Vector3.new(0,0,0)
+
+    local players = collectPlayers()
+    local dynamic = collectDynamic(center)
+
+    local cok, cx, cy, cz, c00, c01, c02, c10, c11, c12, c20, c21, c22 = pcall(function() return cam.CFrame:GetComponents() end)
+    local camData = nil
+    if cok then
+        camData = {
+            cf = { cx, cy, cz, c00, c01, c02, c10, c11, c12, c20, c21, c22 },
+            fov = cam.FieldOfView,
+            vw = cam.ViewportSize.X,
+            vh = cam.ViewportSize.Y,
+        }
+    end
+
+    local payload = {
+        userId = LP.UserId,
+        placeId = game.PlaceId,
+        jobId = game.JobId,
+        players = players,
+        dynamic = dynamic,
+        camera = camData,
+    }
+    local r = watchHttpPost("/api/watch/stream", payload)
+    if r and r.ok then Watch.stats.sent = Watch.stats.sent + 1
+    else Watch.stats.errors = Watch.stats.errors + 1 end
+end
+
+local function watchStart()
+    if Watch.on then warn("[Watch3D] already running") return end
+    Watch.on = true
+    warn("[Watch3D] === WATCH 3D ENABLED ===")
+    spawnTask(function()
+        watchEnsureScene()
+        local lastTick = 0
+        while Watch.on do
+            local now = os.clock()
+            if now - lastTick >= WATCH_TICK then
+                lastTick = now
+                pcall(watchStreamOnce)
+            end
+            RunService.Heartbeat:Wait()
+        end
+        warn("[Watch3D] stream loop exited")
+    end)
+end
+
+local function watchStop()
+    if not Watch.on then return end
+    Watch.on = false
+    warn("[Watch3D] === WATCH 3D DISABLED ===")
+end
+
+_G._UH_WATCH_ENABLE  = watchStart
+_G._UH_WATCH_DISABLE = watchStop
+
+Section(watchTab, "Live 3D Watch")
+C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,60), Font=Enum.Font.Gotham,
+    Text="Streams your game world as a real 3D scene to the control panel viewer.\nThe workspace is exported ONCE per placeId and cached — later runs skip the export.",
+    TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=watchTab})
+Toggle(watchTab, "Enable 3D Watch", false, function(on)
+    if on then watchStart() else watchStop() end
+end)
+Button(watchTab, "Force Re-Export Scene", function()
+    Watch.sceneCached = false
+    local ok = watchEnsureScene()
+    if ok then pcall(function() notify("Watch3D", "Scene cached", T.Good) end)
+    else pcall(function() notify("Watch3D", "Scene export failed", T.Bad) end) end
+end)
+
+-- About
 Section(aboutTab, "Info")
-C("TextLabel",{
-    BackgroundTransparency=1, Size=UDim2.new(1,0,0,70),
-    Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.5.4\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Walk Fling.",
-    TextColor3=T.Dim, TextSize=11, TextWrapped=true,
-    TextXAlignment=Enum.TextXAlignment.Left,
-    TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab,
-})
+C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,70), Font=Enum.Font.Gotham,
+    Text="Universal Hub v3.7.0\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Walk Fling, Watch 3D.",
+    TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab})
 
 spawnTask(function()
     tw(win, CI, {BackgroundTransparency = 0.15})
@@ -809,20 +892,13 @@ local function fetchExecutions()
 end
 
 local function setExecDisplay(n)
-    if execValueLbl and n then
-        pcall(function() execValueLbl.Text = tostring(n) end)
-    end
+    if execValueLbl and n then pcall(function() execValueLbl.Text = tostring(n) end) end
 end
 
 spawnTask(function()
     local count = postExecution()
-    if count then
-        setExecDisplay(count)
-    else
-        local read = fetchExecutions()
-        if read then setExecDisplay(read) end
-    end
-
+    if count then setExecDisplay(count)
+    else local read = fetchExecutions(); if read then setExecDisplay(read) end end
     while true do
         waitTask(15)
         local read = fetchExecutions()
@@ -831,7 +907,7 @@ spawnTask(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════
---  BACKEND (relay — unchanged)
+--  BACKEND RELAY
 -- ═══════════════════════════════════════════════════════════════
 if loadstring then
     local transport = nil
@@ -904,10 +980,7 @@ if loadstring then
         ws.OnClose:Connect(function()
             connected = false
             waitTask(5)
-            if transport == "ws" then
-                transport = nil
-                spawnTask(startHTTP)
-            end
+            if transport == "ws" then transport = nil; spawnTask(startHTTP) end
         end)
         return true
     end
@@ -951,15 +1024,8 @@ if loadstring then
         waitTask(2)
         if connected or transport == "http" then
             send({
-                type = "ping",
-                userId = LP.UserId,
-                username = LP.Name,
-                displayName = LP.DisplayName,
-                placeId = game.PlaceId,
-                jobId = game.JobId,
-                gameId = game.GameId,
-                respawned = true,
-                ts = os.time(),
+                type = "ping", userId = LP.UserId, username = LP.Name, displayName = LP.DisplayName,
+                placeId = game.PlaceId, jobId = game.JobId, gameId = game.GameId, respawned = true, ts = os.time(),
             })
         end
     end)
