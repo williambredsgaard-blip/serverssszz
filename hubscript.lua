@@ -591,17 +591,13 @@ C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,60), Font=Enum.Fon
     TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=espTab})
 
 -- ═══════════════════════════════════════════════════════════════
---  WATCH 3D  —  scene export + live streaming
+--  WATCH 3D — scene export + live streaming
 -- ═══════════════════════════════════════════════════════════════
-local WATCH_TICK = 0.05      -- stream tick (~20 Hz)
-local DYNAMIC_RADIUS = 300   -- studs around player for unanchored parts
+local WATCH_TICK = 0.05
+local DYNAMIC_RADIUS = 300
 local MAX_SCENE_PARTS = 30000
 
-local Watch = {
-    on = false,
-    sceneCached = false,
-    stats = { sent = 0, errors = 0, sceneParts = 0 },
-}
+local Watch = { on=false, sceneCached=false, stats={sent=0,errors=0} }
 
 local function watchHttpGet(path)
     local body = fetchUrl(RELAY_HTTP .. path)
@@ -627,9 +623,8 @@ local function watchHttpPost(path, body)
     return nil
 end
 
--- Export a single part into the compact array format.
--- [x,y,z, r00,r01,r02,r10,r11,r12,r20,r21,r22, sx,sy,sz, r,g,b, transp, shape]
--- shape: 0=Box, 1=Ball, 2=Cylinder, 3=Wedge
+-- Export a BasePart as [x,y,z, r00..r22, sx,sy,sz, r,g,b, transparency, shape]
+-- shape: 0=Box 1=Ball 2=Cylinder 3=Wedge
 local function exportPart(obj)
     if not obj:IsA("BasePart") then return nil end
     local cf = obj.CFrame
@@ -687,7 +682,7 @@ local function watchEnsureScene()
     local parts = exportWorkspace()
     warn("[Watch3D] Exported " .. #parts .. " parts in " .. string.format("%.2f", os.clock()-t0) .. "s")
     if #parts == 0 then
-        warn("[Watch3D] No parts exported (workspace empty?)")
+        warn("[Watch3D] No parts exported")
         Watch.sceneCached = true
         return true
     end
@@ -710,7 +705,6 @@ local function watchEnsureScene()
     return false
 end
 
--- Dynamic parts cache (unanchored parts) — refreshed every 2s
 local _dynCache, _dynCacheAt = nil, 0
 local function getUnanchored()
     local now = os.clock()
@@ -848,7 +842,7 @@ end)
 -- About
 Section(aboutTab, "Info")
 C("TextLabel",{BackgroundTransparency=1, Size=UDim2.new(1,0,0,70), Font=Enum.Font.Gotham,
-    Text="Universal Hub v3.7.0\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-AFK, Walk Fling, Watch 3D.",
+    Text="Universal Hub v3.7.0\nby Nebula\n\nGames, Fly, ESP, Fast Walk, High Jump, Anti-FK, Walk Fling, Watch 3D.",
     TextColor3=T.Dim, TextSize=11, TextWrapped=true, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, Parent=aboutTab})
 
 spawnTask(function()
