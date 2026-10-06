@@ -4243,6 +4243,15 @@ const GEO_MESH = (() => {
 const MAT_OPAQUE = new THREE.MeshLambertMaterial({ color: 0xffffff });
 const MAT_TRANSPARENT = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
 
+// ── Viewer state ──
+const playerMeshes = {};
+let currentData = null;
+let camMode = 'orbit';
+let sceneLoaded = false;
+let lastPlaceId = null;
+let lastFpsTime = performance.now();
+let frameCount = 0;
+
 // ── Texture loading ──
 const texLoader = new THREE.TextureLoader();
 texLoader.setCrossOrigin('anonymous');
@@ -4626,6 +4635,19 @@ document.getElementById('btnReset').addEventListener('click', function(){
   camera.quaternion.set(0, 0, 0, 1);
 });
 
+window.addEventListener('error', (e) => {
+  const eb = document.getElementById('errbox');
+  if (!eb) return;
+  eb.style.display = 'block';
+  eb.textContent = 'Error: ' + (e.message || 'unknown');
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const eb = document.getElementById('errbox');
+  if (!eb) return;
+  eb.style.display = 'block';
+  eb.textContent = 'Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+});
+
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
@@ -4722,12 +4744,6 @@ async function poll() {
   pollBusy = false;
   setTimeout(poll, POLL_INTERVAL_MS);
 }
-
-window.addEventListener('error', (e) => {
-  const eb = document.getElementById('errbox');
-  eb.style.display = 'block';
-  eb.textContent = 'Error: ' + (e.message || 'unknown');
-});
 
 poll();
 </script>
