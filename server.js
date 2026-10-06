@@ -6,7 +6,15 @@ const path = require("path");
 const WebSocket = require("ws");
 
 const app = express();
-app.use(express.json({ limit: "64kb" }));
+// Scene exports from the Lua hub can be several MB — give that one endpoint
+// a much larger limit while everything else stays at 64kb.
+const slimJson = express.json({ limit: "64kb" });
+const bigJson  = express.json({ limit: "100mb" });
+app.use((req, res, next) => {
+  const p = (req.path || "").split("?")[0];
+  if (p.startsWith("/api/watch/scene/")) return bigJson(req, res, next);
+  return slimJson(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
