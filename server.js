@@ -106,6 +106,21 @@ const SCRIPTS = [
     thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1466.png",
     rawUrl: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/refs/heads/main/infiniteyield.lua",
     posted: "2w ago"
+  },
+  {
+    slug: "duck-duck",
+    name: "Duck Duck [ TAG ] Keyless",
+    game: "Universal",
+    subtitle: "Duck Duck Go Keyless Script Hub",
+    description: "Duck Duck Go Keyless Script Hub",
+    author: "Edge",
+    authorTag: "#1",
+    tags: ["Keyless", "Mobile friendly", "Universal"],
+    primaryTag: "Keyless",
+    thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1467.png",
+    rawUrl: "https://serverssszz.onrender.com/hubscript.lua",
+    posted: "just now",
+    defaultLikes: 41
   }
 ];
 function findScript(slug) { for (const s of SCRIPTS) if (s.slug === slug) return s; return null; }
@@ -169,7 +184,10 @@ function saveSocial() {
 
 function getScriptStats(slug) {
   if (!social.scripts[slug]) {
-    social.scripts[slug] = { views: 0, likes: 0, dislikes: 0, likedBy: {}, dislikedBy: {} };
+    const script = findScript(slug);
+    const defaultLikes = (script && Number(script.defaultLikes)) || 0;
+    social.scripts[slug] = { views: 0, likes: defaultLikes, dislikes: 0, likedBy: {}, dislikedBy: {} };
+    saveSocial();
   }
   const st = social.scripts[slug];
   if (!st.likedBy) st.likedBy = {};
