@@ -121,6 +121,22 @@ const SCRIPTS = [
     rawUrl: "https://serverssszz.onrender.com/hubscript.lua",
     posted: "just now",
     defaultLikes: 41
+  },
+  {
+    slug: "voicechat-no",
+    name: "VoiceChat No",
+    game: "Universal",
+    subtitle: "Disable Voice Chat Prompts",
+    description: "VoiceChat No blocks Roblox's voice chat popups, banners, and age-verification prompts so they never interrupt gameplay. Works across every game, needs no key, and toggles off cleanly if you want the default behaviour back.",
+    author: "Edge",
+    authorTag: "#1",
+    tags: ["Keyless", "Mobile friendly", "Universal"],
+    primaryTag: "Keyless",
+    thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1468.png",
+    rawUrl: "https://serverssszz.onrender.com/voicechat_no.lua",
+    posted: "just now",
+    defaultLikes: 48,
+    defaultViews: 322
   }
 ];
 function findScript(slug) { for (const s of SCRIPTS) if (s.slug === slug) return s; return null; }
@@ -186,7 +202,8 @@ function getScriptStats(slug) {
   if (!social.scripts[slug]) {
     const script = findScript(slug);
     const defaultLikes = (script && Number(script.defaultLikes)) || 0;
-    social.scripts[slug] = { views: 0, likes: defaultLikes, dislikes: 0, likedBy: {}, dislikedBy: {} };
+    const defaultViews = (script && Number(script.defaultViews)) || 0;
+    social.scripts[slug] = { views: defaultViews, likes: defaultLikes, dislikes: 0, likedBy: {}, dislikedBy: {} };
     saveSocial();
   }
   const st = social.scripts[slug];
@@ -3208,18 +3225,54 @@ setInterval(() => {
 }, 2000);
 
 // ─── LUA FILES ───
+// If a .lua file isn't found on disk, we fall back to fetching the raw version
+// from GitHub. This means you can edit scripts on GitHub and the executor
+// will pick them up without redeploying the server. Bodies are cached in
+// memory for 5 minutes to keep GitHub request volume low.
+const GITHUB_LUA_FALLBACK = {
+  "voicechat_no.lua": "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/voicechat_no.lua",
+  "ddg.lua":          "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/ddg.lua",
+  "mm2.lua":          "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/mm2.lua",
+  "hubscript.lua":    "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/hubscript.lua",
+  "controller.lua":   "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/controller.lua",
+};
+const luaRemoteCache = new Map();
+const LUA_REMOTE_TTL = 5 * 60 * 1000;
+
 function serveLua(name) {
-  return (req, res) => {
+  return async (req, res) => {
     const filePath = findLuaFile(name);
-    if (!filePath) return res.status(404).set("Content-Type", "text/plain").send(`-- ${name} not found`);
-    try { res.set("Content-Type", "text/plain").send(fs.readFileSync(filePath, "utf8")); }
-    catch (e) { res.status(500).set("Content-Type", "text/plain").send(`-- error: ${e.message}`); }
+    if (filePath) {
+      try { res.set("Content-Type", "text/plain; charset=utf-8").send(fs.readFileSync(filePath, "utf8")); }
+      catch (e) { res.status(500).set("Content-Type", "text/plain").send(`-- error: ${e.message}`); }
+      return;
+    }
+    const remote = GITHUB_LUA_FALLBACK[name];
+    if (!remote) return res.status(404).set("Content-Type", "text/plain").send(`-- ${name} not found`);
+    try {
+      const now = Date.now();
+      const cached = luaRemoteCache.get(name);
+      let body;
+      if (cached && now - cached.at < LUA_REMOTE_TTL) {
+        body = cached.body;
+      } else {
+        body = await fetchText(remote);
+        luaRemoteCache.set(name, { at: now, body });
+      }
+      res.set("Content-Type", "text/plain; charset=utf-8");
+      res.set("Cache-Control", "no-cache");
+      res.send(body);
+    } catch (e) {
+      console.error(`[lua] remote fetch failed for ${name}: ${e.message}`);
+      res.status(502).set("Content-Type", "text/plain").send(`-- remote fetch failed: ${e.message}`);
+    }
   };
 }
 app.get("/hubscript.lua", serveLua("hubscript.lua"));
 app.get("/controller.lua", serveLua("controller.lua"));
 app.get("/ddg.lua", serveLua("ddg.lua"));
 app.get("/mm2.lua", serveLua("mm2.lua"));
+app.get("/voicechat_no.lua", serveLua("voicechat_no.lua"));
 app.get("/wh.txt", serveLua("wh.txt"));
 
 app.get("/files", (req, res) => {
