@@ -912,6 +912,17 @@ app.get("/ads.txt", (req, res) => {
   res.send(`google.com, ${ADSENSE_PUB_ID}, DIRECT, f08c47fec0942fa0\n`);
 });
 
+// ─── AUDIO PROXY ───
+// Redirects to the raw GitHub URL so the MP3s can be streamed on this domain.
+// Roblox in-game playback cannot use these URLs (Roblox needs rbxassetid://),
+// but browsers, Discord, and external players can stream them directly.
+app.get("/audios/:file", (req, res) => {
+  const file = String(req.params.file || "").trim();
+  if (!file) return res.status(400).set("Content-Type", "text/plain").send("No file specified");
+  const githubUrl = "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/" + encodeURIComponent(file);
+  res.redirect(302, githubUrl);
+});
+
 // ═══════════════════════════════════════════════════════════════
 //  SOCIAL / STATS API
 // ═══════════════════════════════════════════════════════════════
