@@ -1,3 +1,5 @@
 {
-  "outputDirectory": "."
+  "rewrites": [
+    { "source": "/wh.txt", "destination": "/wh.txt" }
+  ]
 }
