@@ -1,5 +1,7 @@
 {
-  "rewrites": [
-    { "source": "/wh.txt", "destination": "/wh.txt" }
-  ]
+  "functions": {
+    "server.js": {
+      "includeFiles": "wh.txt"
+    }
+  }
 }
