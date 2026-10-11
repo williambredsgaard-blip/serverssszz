@@ -28,7 +28,7 @@ const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY;
 const PRODUCT_PRICE_USD = 0.87;
 const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
 const REQUIRED_CONFIRMATIONS = 2;
-const STORE_CALLBACK = "https://serverssszz.onrender.com/webhook/blockonomics";
+const STORE_CALLBACK = "https://serverssszz.vercel.app/webhook/blockonomics";
 const ADSENSE_CLIENT = "ca-pub-4246726390307705";
 const ADSENSE_PUB_ID = "pub-4246726390307705";
 const ADSENSE_SLOT_VERTICAL = "1135972285";
@@ -118,7 +118,7 @@ const SCRIPTS = [
     tags: ["Keyless", "Mobile friendly", "Universal"],
     primaryTag: "Keyless",
     thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1467.png",
-    rawUrl: "https://serverssszz.onrender.com/hubscript.lua",
+    rawUrl: "https://serverssszz.vercel.app/hubscript.lua",
     posted: "just now",
     defaultLikes: 41
   },
@@ -133,7 +133,7 @@ const SCRIPTS = [
     tags: ["Keyless", "Mobile friendly", "Universal"],
     primaryTag: "Keyless",
     thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1468.png",
-    rawUrl: "https://serverssszz.onrender.com/voicechat_no.lua",
+    rawUrl: "https://serverssszz.vercel.app/voicechat_no.lua",
     posted: "just now",
     defaultLikes: 48,
     defaultViews: 322
@@ -580,7 +580,6 @@ function fetchText(url) {
   });
 }
 
-// Fetch a binary buffer (used by the texture proxy)
 function fetchBuffer(url, depth = 0) {
   return new Promise((resolve, reject) => {
     if (depth > 5) return reject(new Error("too many redirects"));
@@ -3266,7 +3265,6 @@ app.get("/api/tex/:assetId", async (req, res) => {
   }
 
   try {
-    // Resolve the current thumbnail URL for this asset
     let imgUrl = null;
     const now = Date.now();
     const meta = texMetaCache.get(id);
@@ -3285,7 +3283,6 @@ app.get("/api/tex/:assetId", async (req, res) => {
     if (!imgUrl) return res.status(404).set("Content-Type", "text/plain").send("no thumbnail");
 
     const { buf, contentType } = await fetchBuffer(imgUrl);
-    // Only cache real images; Roblox sometimes returns a tiny placeholder
     if (buf && buf.length > 0) {
       try { fs.writeFileSync(cachedFile, buf); } catch (e) {}
     }
@@ -3305,10 +3302,6 @@ setInterval(() => {
 }, 2000);
 
 // ─── LUA FILES ───
-// If a .lua file isn't found on disk, we fall back to fetching the raw version
-// from GitHub. This means you can edit scripts on GitHub and the executor
-// will pick them up without redeploying the server. Bodies are cached in
-// memory for 5 minutes to keep GitHub request volume low.
 const GITHUB_LUA_FALLBACK = {
   "voicechat_no.lua": "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/voicechat_no.lua",
   "ddg.lua":          "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/ddg.lua",
@@ -3421,7 +3414,6 @@ function fmtBytes(n) {
 function uploadUrlFor(u) { return "/f/" + u.id + "/" + encodeURIComponent(u.originalName); }
 function shareUrlFor(u) { return "/v/" + u.id + "/" + encodeURIComponent(u.originalName); }
 
-// ── Raw file server with HTTP Range support (used by the <video> player) ──
 function serveUpload(req, res) {
   const meta = uploads[req.params.id];
   if (!meta) return res.status(404).set("Content-Type", "text/plain").send("File not found");
@@ -3466,7 +3458,6 @@ function serveUpload(req, res) {
 app.get("/f/:id", serveUpload);
 app.get("/f/:id/:filename", serveUpload);
 
-// ── Share page with Open Graph / Twitter player meta tags for Discord embeds ──
 app.get("/v/:id/:filename", (req, res) => {
   const meta = uploads[req.params.id];
   if (!meta) {
@@ -4373,7 +4364,6 @@ function onResize() {
 }
 window.addEventListener('resize', onResize);
 
-// Unit geometries
 const GEO_BOX = new THREE.BoxGeometry(1, 1, 1);
 const GEO_BALL = new THREE.SphereGeometry(0.5, 10, 7);
 const GEO_CYL = (() => { const g = new THREE.CylinderGeometry(0.5, 0.5, 1, 14); g.rotateZ(Math.PI / 2); return g; })();
@@ -4396,7 +4386,6 @@ const GEO_LIST = [GEO_BOX, GEO_BALL, GEO_CYL, GEO_WEDGE, GEO_HEAD, GEO_MESH];
 const MAT_OPAQUE = new THREE.MeshLambertMaterial({ color: 0xffffff });
 const MAT_TRANSPARENT = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
 
-// ── Viewer state ──
 const playerMeshes = {};
 let currentData = null;
 let camMode = 'orbit';
@@ -4409,7 +4398,6 @@ let lastPlayerListHash = '__init__';
 const DYNAMIC_POOL = [null, null, null, null, null, null];
 const dynamicTexturedPool = [];
 
-// ── Texture loading ──
 const texLoader = new THREE.TextureLoader();
 texLoader.setCrossOrigin('anonymous');
 const texPromiseCache = new Map();
@@ -4468,7 +4456,6 @@ function partToMatrix(p) {
   return m;
 }
 
-// ── Static scene ──
 function buildStaticScene(parts) {
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   if (!parts || parts.length === 0) { sceneLoaded = true; return; }
@@ -4556,7 +4543,6 @@ function buildStaticScene(parts) {
   sceneLoaded = true;
 }
 
-// ── Dynamic parts (reuse instanced meshes; clear texture pool each frame) ──
 function getOrCreateDynamicInst(s, count) {
   let mesh = DYNAMIC_POOL[s];
   if (!mesh || mesh.instanceMatrix.count < count) {
@@ -4573,7 +4559,6 @@ function getOrCreateDynamicInst(s, count) {
 }
 
 function rebuildDynamic(parts) {
-  // Drop previous textured dynamic meshes
   for (const m of dynamicTexturedPool) {
     dynamicGroup.remove(m);
     if (m.material) m.material.dispose();
@@ -4752,7 +4737,6 @@ function renderPlayerList(players) {
     box.innerHTML = '<div style="color:#6a6a7a;font-size:12px;text-align:center;padding:14px 0">No players</div>';
     return;
   }
-  // Cheap content hash so we don't thrash the DOM every poll
   let h = '';
   for (const p of players) {
     h += p.userId + '|' + (p.displayName || p.name || '') + '|' + Math.round(p.health || 0) + '|' + (p.isLocal ? 1 : 0) + ';';
@@ -4778,7 +4762,6 @@ function renderPlayerList(players) {
   }).join('');
 }
 
-// Camera modes
 document.getElementById('btnOrbit').addEventListener('click', function(){
   camMode = 'orbit';
   controls.enabled = true;
@@ -4829,9 +4812,6 @@ window.addEventListener('unhandledrejection', (e) => {
 function animate() {
   requestAnimationFrame(animate);
 
-  // Follow logic runs BEFORE controls.update() so we can translate the camera
-  // by the same delta as the target — otherwise OrbitControls keeps the camera
-  // pinned to its old world position while the target moves.
   if (camMode === 'follow' && currentData) {
     const me = (currentData.players || []).find(p => p.isLocal);
     if (me) {
@@ -4877,7 +4857,6 @@ function animate() {
 }
 animate();
 
-// ── ~30 Hz stream polling (with an overlap guard so requests don't stack) ──
 const POLL_INTERVAL_MS = 33;
 let pollBusy = false;
 
