@@ -1,7 +1,7 @@
 {
   "functions": {
     "server.js": {
-      "includeFiles": "wh.txt"
+      "includeFiles": "*.{txt,json}"
     }
   }
 }
