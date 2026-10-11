@@ -21,7 +21,10 @@ const wss = new WebSocket.Server({ server });
 
 const wsClients = new Map();
 const httpClients = new Map();
-const STALE_MS = 5_000;
+// v3.7.5: widened from 5s. A client that pings every 4s and drains every
+// 0.5s must never age out between pings. 45s covers two dropped pings plus
+// a cold-start spin-up, comfortably.
+const STALE_MS = 45_000;
 
 // ─── CONFIG ───
 const BLOCKONOMICS_API_KEY = process.env.BLOCKONOMICS_API_KEY;
@@ -564,7 +567,7 @@ const TEX_DIR = path.join(__dirname, "tex_cache");
 if (!fs.existsSync(TEX_DIR)) {
   try { fs.mkdirSync(TEX_DIR, { recursive: true }); } catch (e) { console.error("[tex] mkdir failed:", e.message); }
 }
-const texMetaCache = new Map(); // assetId -> { url, at }
+const texMetaCache = new Map();
 const TEX_TTL = 24 * 60 * 60 * 1000;
 
 // ─── HELPERS ───
@@ -3145,14 +3148,33 @@ app.get("/control", (req, res) => {
   res.set("Content-Type", "text/html").send(html);
 });
 
-// ─── RELAY ───
+// ═══════════════════════════════════════════════════════════════
+//  RELAY  — v3.7.5 unified presence
+// ═══════════════════════════════════════════════════════════════
+
+// Prefer WS when a user has both transports live; never show the same user
+// twice. WS entries that haven't pinged inside STALE_MS are dropped too, so
+// a half-closed socket doesn't pin a ghost row on the dashboard.
 function userListPayload() {
   const users = [];
-  for (const [ws, info] of wsClients) if (info.userId && !info.isWeb) users.push({ ...info, transport: "ws" });
+  const seen = new Set();
   const now = Date.now();
-  for (const [uid, entry] of httpClients) if (now - entry.info.ts < STALE_MS) users.push({ ...entry.info, transport: "http" });
+
+  for (const [ws, info] of wsClients) {
+    if (!info.userId || info.isWeb) continue;
+    if (info.ts && now - info.ts > STALE_MS) continue;
+    users.push({ ...info, transport: "ws" });
+    seen.add(String(info.userId));
+  }
+
+  for (const [uid, entry] of httpClients) {
+    if (seen.has(String(uid))) continue;
+    if (now - entry.info.ts > STALE_MS) continue;
+    users.push({ ...entry.info, transport: "http" });
+  }
   return users;
 }
+
 function broadcast(obj, excludeWs) {
   const msg = JSON.stringify(obj);
   for (const [ws] of wsClients) if (ws !== excludeWs && ws.readyState === 1) ws.send(msg);
@@ -3215,7 +3237,11 @@ app.get("/poll", (req, res) => {
   const uid = parseInt(req.query.userId);
   if (!uid) return res.json({ messages: [], users: userListPayload() });
   let entry = httpClients.get(uid);
-  if (!entry) { entry = { info: { userId: uid, ts: Date.now(), transport: "http" }, queue: [] }; httpClients.set(uid, entry); broadcast({ type: "userJoined", ...entry.info }, null); }
+  if (!entry) {
+    entry = { info: { userId: uid, ts: Date.now(), transport: "http" }, queue: [] };
+    httpClients.set(uid, entry);
+    broadcast({ type: "userJoined", ...entry.info }, null);
+  }
   if (req.query.displayName) {
     entry.info.displayName = String(req.query.displayName);
     entry.info.placeId = parseInt(req.query.placeId) || 0;
@@ -3231,11 +3257,22 @@ app.post("/send", (req, res) => {
   const msg = req.body;
   if (!msg || !msg.type) return res.json({ ok: false });
   if (msg.type === "execute" || msg.type === "output") { deliverTo(msg.targetUserId, msg); return res.json({ ok: true }); }
+
+  // v3.7.5: ping/identify now CREATES the HTTP entry if it doesn't exist
+  // instead of silently dropping. This is the fix for clients that ping
+  // before their first /poll lands on this container.
   if (msg.type === "ping" || msg.type === "identify") {
-    const entry = httpClients.get(msg.userId);
-    if (entry) { Object.assign(entry.info, msg, { ts: Date.now() }); broadcast(msg, null); }
+    let entry = httpClients.get(msg.userId);
+    if (!entry) {
+      entry = { info: { userId: msg.userId, ts: Date.now(), transport: "http" }, queue: [] };
+      httpClients.set(msg.userId, entry);
+      broadcast({ type: "userJoined", ...entry.info }, null);
+    }
+    Object.assign(entry.info, msg, { ts: Date.now() });
+    broadcast(msg, null);
     return res.json({ ok: true });
   }
+
   if (msg.type === "requestUserList") return res.json({ ok: true, users: userListPayload() });
   res.json({ ok: true });
 });
@@ -3296,10 +3333,12 @@ app.get("/api/tex/:assetId", async (req, res) => {
   }
 });
 
+// v3.7.5: slowed from 2s to 5s so the sweep doesn't race healthy HTTP polls.
+// STALE_MS is 45s, so 5s granularity is well within budget.
 setInterval(() => {
   const now = Date.now();
   for (const [uid, entry] of httpClients) if (now - entry.info.ts > STALE_MS) { httpClients.delete(uid); broadcast({ type: "userLeft", userId: uid }, null); }
-}, 2000);
+}, 5000);
 
 // ─── LUA FILES ───
 const GITHUB_LUA_FALLBACK = {
