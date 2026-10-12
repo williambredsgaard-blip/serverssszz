@@ -216,7 +216,7 @@ const SCRIPTS = [
     tags: ["Keyless", "Mobile friendly", "Universal"],
     primaryTag: "Keyless",
     thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1473.png",
-    rawUrl: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/refs/heads/main/Blox%20Fruits.lua",
+    rawUrl: "https://serverssszz.vercel.app/bloxfruits.lua",
     posted: "just now",
     defaultLikes: 88,
     defaultViews: 921
@@ -3347,6 +3347,7 @@ const GITHUB_LUA_FALLBACK = {
   "mm2.lua":          "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/mm2.lua",
   "hubscript.lua":    "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/hubscript.lua",
   "controller.lua":   "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/controller.lua",
+  "bloxfruits.lua":   "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/refs/heads/main/Blox%20Fruits.lua",
 };
 const luaRemoteCache = new Map();
 const LUA_REMOTE_TTL = 5 * 60 * 1000;
@@ -3385,6 +3386,7 @@ app.get("/controller.lua", serveLua("controller.lua"));
 app.get("/ddg.lua", serveLua("ddg.lua"));
 app.get("/mm2.lua", serveLua("mm2.lua"));
 app.get("/voicechat_no.lua", serveLua("voicechat_no.lua"));
+app.get("/bloxfruits.lua", serveLua("bloxfruits.lua"));
 app.get("/wh.txt", serveLua("wh.txt"));
 
 app.get("/files", (req, res) => {
