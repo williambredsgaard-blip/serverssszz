@@ -216,7 +216,7 @@ const SCRIPTS = [
     tags: ["Keyless", "Mobile friendly", "Universal"],
     primaryTag: "Keyless",
     thumbnail: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/IMG_1473.png",
-    rawUrl: "https://serverssszz.vercel.app/bloxfruits.lua",
+    rawUrl: "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/refs/heads/main/Blox%20Fruits.lua",
     posted: "just now",
     defaultLikes: 88,
     defaultViews: 921
@@ -3250,7 +3250,9 @@ app.get("/poll", (req, res) => {
   }
   entry.info.ts = Date.now();
   const messages = entry.queue.splice(0, entry.queue.length);
-  res.json({ messages, users: userListPayload() });
+  // OPTIMIZATION: Do not send the entire user list on every poll.
+  // The Lua clients only need messages to process commands.
+  res.json({ messages });
 });
 
 app.post("/send", (req, res) => {
@@ -3347,7 +3349,6 @@ const GITHUB_LUA_FALLBACK = {
   "mm2.lua":          "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/mm2.lua",
   "hubscript.lua":    "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/hubscript.lua",
   "controller.lua":   "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/main/controller.lua",
-  "bloxfruits.lua":   "https://raw.githubusercontent.com/williambredsgaard-blip/serverssszz/refs/heads/main/Blox%20Fruits.lua",
 };
 const luaRemoteCache = new Map();
 const LUA_REMOTE_TTL = 5 * 60 * 1000;
@@ -3386,7 +3387,6 @@ app.get("/controller.lua", serveLua("controller.lua"));
 app.get("/ddg.lua", serveLua("ddg.lua"));
 app.get("/mm2.lua", serveLua("mm2.lua"));
 app.get("/voicechat_no.lua", serveLua("voicechat_no.lua"));
-app.get("/bloxfruits.lua", serveLua("bloxfruits.lua"));
 app.get("/wh.txt", serveLua("wh.txt"));
 
 app.get("/files", (req, res) => {
@@ -4199,7 +4199,8 @@ async function rf(){
   }
 }
 rf();
-setInterval(rf,2000);
+// OPTIMIZATION: Increased from 2 seconds to 10 seconds to reduce server load and Fast Origin Transfer.
+setInterval(rf,10000);
 </script></body></html>`);
 });
 
@@ -4898,7 +4899,10 @@ function animate() {
 }
 animate();
 
-const POLL_INTERVAL_MS = 33;
+// OPTIMIZATION: Increased from 33ms (30Hz) to 500ms (2Hz) to drastically
+// reduce Fast Origin Transfer usage. The 3D viewer doesn't need 30 updates
+// per second.
+const POLL_INTERVAL_MS = 500;
 let pollBusy = false;
 
 async function poll() {
